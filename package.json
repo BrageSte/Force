@@ -1,0 +1,8 @@
+{
+  "name": "krimblokk",
+  "private": true,
+  "workspaces": [
+    "web",
+    "packages/core"
+  ]
+}
