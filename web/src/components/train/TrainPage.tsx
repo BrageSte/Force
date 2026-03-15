@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  benchmarkReferenceSourceDescription,
+  benchmarkReferenceSourceLabel,
+  type BenchmarkReferenceResolution,
+} from '../../profile/benchmarkReferences.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { toProfileSnapshot } from '../../types/profile.ts';
@@ -42,6 +47,7 @@ interface ActiveRunConfig {
   bodyweightRelativeTarget: number | null;
   benchmarkSourceId?: string;
   benchmarkSourceLabel?: string;
+  benchmarkReference: BenchmarkReferenceResolution | null;
   profileSnapshot: ReturnType<typeof toProfileSnapshot> | null;
   previousResult: TrainSessionResult | null;
   recommendation: TrainRecommendation | null;
@@ -118,7 +124,7 @@ export function TrainPage() {
   );
 
   const autoTarget = useMemo(
-    () => resolveTrainTarget(selectedWorkout, profileTests, hand, activeProfile ? toProfileSnapshot(activeProfile) : null),
+    () => resolveTrainTarget(selectedWorkout, profileTests, hand, activeProfile),
     [activeProfile, hand, profileTests, selectedWorkout],
   );
 
@@ -134,7 +140,7 @@ export function TrainPage() {
       .sort((a, b) => b.completedAtIso.localeCompare(a.completedAtIso))[0] ?? null;
   }, [autoTarget.benchmarkSourceId, hand, profileTests, selectedWorkout.benchmarkSourceId]);
 
-  const handleStart = (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel'>) => {
+  const handleStart = (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel' | 'benchmarkReference'>) => {
     setActiveRun({
       hand,
       workoutId: selectedWorkout.id,
@@ -147,6 +153,7 @@ export function TrainPage() {
       bodyweightRelativeTarget: config.bodyweightRelativeTarget,
       benchmarkSourceId: config.benchmarkSourceId,
       benchmarkSourceLabel: config.benchmarkSourceLabel,
+      benchmarkReference: config.benchmarkReference,
       profileSnapshot: activeProfile ? toProfileSnapshot(activeProfile) : null,
       previousResult: previousMatchingResult,
       recommendation: selectedRecommendation,
@@ -169,7 +176,7 @@ export function TrainPage() {
       const nextWorkout = activeRun.workoutKind === 'builtin' && isTrainPresetId(activeRun.workoutId)
         ? getTrainProtocolById(activeRun.workoutId)
         : customWorkouts.find(workout => workout.id === activeRun.workoutId) ?? selectedWorkout;
-      const nextResolution = resolveTrainTarget(nextWorkout, profileTests, nextHand, activeProfile ? toProfileSnapshot(activeProfile) : null);
+      const nextResolution = resolveTrainTarget(nextWorkout, profileTests, nextHand, activeProfile);
       const nextBenchmarkId = nextResolution.benchmarkSourceId ?? nextWorkout.benchmarkSourceId;
       const nextBenchmark = nextBenchmarkId
         ? profileTests
@@ -193,6 +200,7 @@ export function TrainPage() {
         bodyweightRelativeTarget: nextResolution.bodyweightRelativeTarget,
         benchmarkSourceId: nextResolution.benchmarkSourceId,
         benchmarkSourceLabel: nextResolution.benchmarkSourceLabel,
+        benchmarkReference: nextResolution.benchmarkReference,
         previousResult: nextPrevious,
         latestBenchmark: nextBenchmark,
       });
@@ -231,6 +239,7 @@ export function TrainPage() {
         bodyweightRelativeTarget={activeRun.bodyweightRelativeTarget}
         benchmarkSourceId={activeRun.benchmarkSourceId}
         benchmarkSourceLabel={activeRun.benchmarkSourceLabel}
+        benchmarkReference={activeRun.benchmarkReference}
         previousResult={activeRun.previousResult}
         recommendation={activeRun.recommendation}
         latestBenchmark={activeRun.latestBenchmark}
@@ -365,17 +374,19 @@ export function TrainPage() {
           />
         </div>
 
-        <TrainSetupPanel
-          key={`${selectedWorkoutKind}:${selectedWorkout.id}:${hand}:${autoTarget.targetKg ?? 'none'}`}
-          selectedWorkout={selectedWorkout}
-          autoTarget={autoTarget}
-          previousMatchingResult={previousMatchingResult}
-          latestBenchmark={latestBenchmark}
-          recommendation={selectedRecommendation}
-          athleteProfile={athleteProfile}
-          deviceConnected={deviceConnected}
-          onStart={handleStart}
-        />
+        <div className="xl:sticky xl:top-4 self-start">
+          <TrainSetupPanel
+            key={`${selectedWorkoutKind}:${selectedWorkout.id}:${hand}:${autoTarget.targetKg ?? 'none'}`}
+            selectedWorkout={selectedWorkout}
+            autoTarget={autoTarget}
+            previousMatchingResult={previousMatchingResult}
+            latestBenchmark={latestBenchmark}
+            recommendation={selectedRecommendation}
+            athleteProfile={athleteProfile}
+            deviceConnected={deviceConnected}
+            onStart={handleStart}
+          />
+        </div>
       </div>
 
       {aiBuilderOpen && (
@@ -407,7 +418,7 @@ export function TrainPage() {
             setSelectedWorkoutId(saved.id);
             setSelectedWorkoutKind('custom');
             setBuilderState(null);
-            const resolution = resolveTrainTarget(saved, profileTests, hand, activeProfile ? toProfileSnapshot(activeProfile) : null);
+            const resolution = resolveTrainTarget(saved, profileTests, hand, activeProfile);
             const previous = profileTraining.find(result => result.workoutId === saved.id && result.hand === hand) ?? null;
             const benchmarkId = resolution.benchmarkSourceId ?? saved.benchmarkSourceId;
             const benchmark = benchmarkId
@@ -430,6 +441,7 @@ export function TrainPage() {
               bodyweightRelativeTarget: resolution.bodyweightRelativeTarget,
               benchmarkSourceId: resolution.benchmarkSourceId,
               benchmarkSourceLabel: resolution.benchmarkSourceLabel,
+              benchmarkReference: resolution.benchmarkReference,
               profileSnapshot: activeProfile ? toProfileSnapshot(activeProfile) : null,
               previousResult: previous,
               recommendation: null,
@@ -542,7 +554,7 @@ function LibrarySection({
       ) : (
         <div className="space-y-3">
           {cards.map(card => (
-            <div key={card.id} className={`bg-surface rounded-xl border p-4 transition-colors ${card.selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/20'}`}>
+            <div key={card.id} className={`bg-surface rounded-xl border p-4 transition-colors ${card.selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}>
               <div className="flex items-start justify-between gap-3">
                 <button onClick={() => onSelect(card.id, card.kind)} className="text-left flex-1">
                   <div className="text-sm font-semibold">{card.title}</div>
@@ -554,7 +566,7 @@ function LibrarySection({
                   </span>
                 )}
               </div>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-surface-alt rounded-lg px-3 py-2">
                   <div className="text-muted">Context</div>
                   <div className="font-semibold mt-0.5">{card.meta}</div>
@@ -564,7 +576,7 @@ function LibrarySection({
                   <div className="font-semibold mt-0.5">{card.latestPeak !== null ? `${card.latestPeak.toFixed(1)} kg` : 'No prior session'}</div>
                 </div>
               </div>
-              <div className="mt-2 text-xs text-muted">{card.structure}</div>
+              <div className="mt-3 pt-3 border-t border-border text-xs text-muted">{card.structure}</div>
               {card.customActions && (
                 <div className="mt-3 flex items-center gap-2">
                   <button onClick={card.customActions.onEdit} className="px-2 py-1 rounded-lg text-xs font-medium bg-surface-alt border border-border text-text">Edit</button>
@@ -597,7 +609,7 @@ function TrainSetupPanel({
   recommendation: TrainRecommendation | null;
   athleteProfile: ReturnType<typeof buildAthleteForceProfile>;
   deviceConnected: boolean;
-  onStart: (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel'>) => void;
+  onStart: (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel' | 'benchmarkReference'>) => void;
 }) {
   const defaultMode: TrainTargetMode = autoTarget.mode === 'manual' ? 'manual' : autoTarget.mode;
   const [targetMode, setTargetMode] = useState<TrainTargetMode>(defaultMode);
@@ -608,6 +620,28 @@ function TrainSetupPanel({
     const parsed = Number(manualTargetKgInput);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }, [autoTarget.targetKg, manualTargetKgInput, targetMode]);
+
+  const autoReference = autoTarget.benchmarkReference;
+  const referenceSummary = autoTarget.sourceMaxKg !== null
+    ? autoReference?.effectiveSource
+      ? `${autoTarget.sourceMaxKg.toFixed(1)} kg from ${benchmarkReferenceSourceLabel(autoReference.effectiveSource)}`
+      : `${autoTarget.sourceMaxKg.toFixed(1)} kg benchmark reference`
+    : autoTarget.bodyweightRelativeTarget !== null
+      ? `${autoTarget.bodyweightRelativeTarget.toFixed(2)} x bodyweight`
+      : targetMode === 'manual' && !manualTargetKgInput.trim()
+        ? 'First set will learn target'
+        : 'Manual target required';
+  const referenceDetail = autoReference?.effectiveSource
+    ? `Active reference is ${benchmarkReferenceSourceDescription(autoReference.effectiveSource)}${autoReference.usedFallback ? ' via fallback because the preferred source is missing.' : '.'}`
+    : autoTarget.rationale[0];
+  const benchmarkSourceValue = autoReference?.effectiveSource
+    ? `${autoTarget.benchmarkSourceLabel ?? latestBenchmark?.protocolName ?? 'Benchmark'} · ${benchmarkReferenceSourceLabel(autoReference.effectiveSource)}${autoReference.usedFallback ? ' fallback' : ''}`
+    : latestBenchmark
+      ? latestBenchmark.protocolName
+      : selectedWorkout.benchmarkSourceLabel ?? 'Custom / manual';
+  const targetSetupDetail = targetMode === 'manual' && !manualTargetKgInput.trim()
+    ? 'Blank manual target means the first set becomes the reference for the rest of the workout.'
+    : autoTarget.rationale[0];
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 space-y-4">
@@ -676,29 +710,23 @@ function TrainSetupPanel({
           <div className="rounded-lg border border-border bg-surface px-3 py-3">
             <div className="text-xs text-muted">Reference</div>
             <div className="text-sm font-semibold mt-1">
-              {autoTarget.sourceMaxKg !== null
-                ? `${autoTarget.sourceMaxKg.toFixed(1)} kg latest benchmark`
-                : autoTarget.bodyweightRelativeTarget !== null
-                  ? `${autoTarget.bodyweightRelativeTarget.toFixed(2)} x bodyweight`
-                  : targetMode === 'manual' && !manualTargetKgInput.trim()
-                    ? 'First set will learn target'
-                    : 'Manual target required'}
+              {referenceSummary}
             </div>
             <div className="text-xs text-muted mt-1">
-              {autoTarget.rationale[0]}
+              {referenceDetail}
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Metric label="Benchmark Source" value={latestBenchmark ? latestBenchmark.protocolName : selectedWorkout.benchmarkSourceLabel ?? 'Custom / manual'} />
+        <Metric label="Benchmark Source" value={benchmarkSourceValue} />
         <Metric label="Previous Matching Session" value={previousMatchingResult ? `${previousMatchingResult.summary.peakTotalKg.toFixed(1)} kg peak` : 'No prior session'} />
       </div>
 
       <div className="text-xs text-muted space-y-1">
         <div>Source basis: {selectedWorkout.sourceBasis}</div>
-        <div>{targetMode === 'manual' && !manualTargetKgInput.trim() ? 'Blank manual target means the first set becomes the reference for the rest of the workout.' : autoTarget.rationale[0]}</div>
+        <div>{targetSetupDetail}</div>
         <div>Recovery notes: {(selectedWorkout.recoveryNotes[0] ?? 'None yet')}</div>
       </div>
 
@@ -711,10 +739,11 @@ function TrainSetupPanel({
             bodyweightRelativeTarget: targetMode === 'bodyweight_relative' ? autoTarget.bodyweightRelativeTarget : null,
             benchmarkSourceId: autoTarget.benchmarkSourceId,
             benchmarkSourceLabel: autoTarget.benchmarkSourceLabel,
+            benchmarkReference: targetMode === 'auto_from_latest_test' ? autoTarget.benchmarkReference : null,
           });
         }}
         disabled={!deviceConnected || (targetMode !== 'manual' && (!resolvedTargetKg || resolvedTargetKg <= 0))}
-        className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-30"
+        className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-40"
       >
         Start Guided Workout
       </button>

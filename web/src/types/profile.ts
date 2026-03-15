@@ -1,6 +1,21 @@
 import type { FingerBool4, Hand, ProfileSex, ProfileSnapshot } from './force.ts';
 
+export type BenchmarkReferenceSource = 'test' | 'manual';
+
+export interface BenchmarkHandReference {
+  manualKg: number | null;
+  preferredSource: BenchmarkReferenceSource;
+}
+
+export interface BenchmarkReferenceByHand {
+  Left: BenchmarkHandReference;
+  Right: BenchmarkHandReference;
+}
+
+export type BenchmarkReferenceMap = Record<string, BenchmarkReferenceByHand>;
+
 export interface UserProfile extends ProfileSnapshot {
+  benchmarkReferences: BenchmarkReferenceMap;
   createdAtIso: string;
   updatedAtIso: string;
 }
@@ -19,6 +34,10 @@ function isHand(value: unknown): value is Hand {
   return value === 'Left' || value === 'Right';
 }
 
+function isBenchmarkReferenceSource(value: unknown): value is BenchmarkReferenceSource {
+  return value === 'test' || value === 'manual';
+}
+
 function normalizeInjuredFingers(value: unknown): FingerBool4 {
   if (!Array.isArray(value) || value.length !== 4) return [...DEFAULT_INJURED_FINGERS];
   return [
@@ -35,6 +54,73 @@ function normalizeOptionalNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function createEmptyBenchmarkHandReference(): BenchmarkHandReference {
+  return {
+    manualKg: null,
+    preferredSource: 'test',
+  };
+}
+
+export function createEmptyBenchmarkReferenceByHand(): BenchmarkReferenceByHand {
+  return {
+    Left: createEmptyBenchmarkHandReference(),
+    Right: createEmptyBenchmarkHandReference(),
+  };
+}
+
+function normalizeBenchmarkHandReference(value: unknown): BenchmarkHandReference {
+  if (!value || typeof value !== 'object') return createEmptyBenchmarkHandReference();
+  const source = value as Partial<BenchmarkHandReference>;
+  return {
+    manualKg: normalizeOptionalNumber(source.manualKg),
+    preferredSource: isBenchmarkReferenceSource(source.preferredSource) ? source.preferredSource : 'test',
+  };
+}
+
+export function normalizeBenchmarkReferences(value: unknown): BenchmarkReferenceMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  const next: BenchmarkReferenceMap = {};
+
+  for (const [benchmarkId, rawByHand] of Object.entries(source)) {
+    if (!benchmarkId.trim()) continue;
+    const byHand = rawByHand && typeof rawByHand === 'object' && !Array.isArray(rawByHand)
+      ? rawByHand as Record<string, unknown>
+      : {};
+    next[benchmarkId] = {
+      Left: normalizeBenchmarkHandReference(byHand.Left),
+      Right: normalizeBenchmarkHandReference(byHand.Right),
+    };
+  }
+
+  return next;
+}
+
+export function cloneBenchmarkReferences(value: BenchmarkReferenceMap | undefined): BenchmarkReferenceMap {
+  const normalized = normalizeBenchmarkReferences(value);
+  const next: BenchmarkReferenceMap = {};
+
+  for (const [benchmarkId, byHand] of Object.entries(normalized)) {
+    next[benchmarkId] = {
+      Left: { ...byHand.Left },
+      Right: { ...byHand.Right },
+    };
+  }
+
+  return next;
+}
+
+export function getBenchmarkReferenceEntry(
+  benchmarkReferences: BenchmarkReferenceMap | undefined,
+  benchmarkId: string,
+  hand: Hand,
+): BenchmarkHandReference {
+  const entry = benchmarkReferences?.[benchmarkId]?.[hand];
+  return entry
+    ? { ...entry }
+    : createEmptyBenchmarkHandReference();
+}
+
 export function createProfile(name = 'Person 1'): UserProfile {
   const now = new Date().toISOString();
   return {
@@ -47,6 +133,7 @@ export function createProfile(name = 'Person 1'): UserProfile {
     injuredFingers: [...DEFAULT_INJURED_FINGERS],
     injuryNotes: '',
     notes: '',
+    benchmarkReferences: {},
     createdAtIso: now,
     updatedAtIso: now,
   };
@@ -67,6 +154,7 @@ export function normalizeProfile(raw: unknown, fallbackName = 'Person 1'): UserP
     injuredFingers: normalizeInjuredFingers(source.injuredFingers),
     injuryNotes: typeof source.injuryNotes === 'string' ? source.injuryNotes : '',
     notes: typeof source.notes === 'string' ? source.notes : '',
+    benchmarkReferences: normalizeBenchmarkReferences(source.benchmarkReferences),
     createdAtIso: typeof source.createdAtIso === 'string' ? source.createdAtIso : fallback.createdAtIso,
     updatedAtIso: typeof source.updatedAtIso === 'string' ? source.updatedAtIso : fallback.updatedAtIso,
   };

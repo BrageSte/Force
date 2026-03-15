@@ -61,7 +61,8 @@ export function ConnectionPanel() {
     if (recording) {
       void handleStopRecording();
     } else {
-      useLiveStore.getState().startRecording();
+      const measurementHand = useLiveStore.getState().measurementHandOverride ?? hand;
+      useLiveStore.getState().startRecording(measurementHand);
     }
   };
 

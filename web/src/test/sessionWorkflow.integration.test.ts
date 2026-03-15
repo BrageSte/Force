@@ -9,7 +9,7 @@ describe('session workflow integration', () => {
     resetAllStores()
 
     const live = useLiveStore.getState()
-    live.startRecording()
+    live.startRecording('Right')
 
     for (const [index, totalKg] of [0, 1, 1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1].entries()) {
       live.appendRecordedSample(uniformForceSample(index * 100, totalKg))
@@ -27,5 +27,22 @@ describe('session workflow integration', () => {
     expect(loaded?.sessionId).toBe(payload?.sessionId)
     expect(loaded?.profile?.profileId).toBe(payload?.profile?.profileId)
     expect(loaded?.samples).toHaveLength(10)
+  })
+
+  it('uses the recording hand when saving the session payload', async () => {
+    resetAllStores()
+
+    const live = useLiveStore.getState()
+    live.startRecording('Left')
+    useAppStore.getState().setHand('Right')
+
+    for (const [index, totalKg] of [0, 1, 1, 1, 1, 1, 0.1, 0.1, 0.1, 0.1].entries()) {
+      live.appendRecordedSample(uniformForceSample(index * 100, totalKg))
+    }
+
+    const payload = await saveCurrentRecordingAsSession()
+
+    expect(payload?.hand).toBe('Left')
+    expect(payload?.summary.hand).toBe('Left')
   })
 })

@@ -1,9 +1,10 @@
 import type { DataSource } from '../types/device.ts';
-import type { AcquisitionSample, Finger4, ForceSample } from '../types/force.ts';
+import type { AcquisitionSample, Finger4, ForceSample, Hand } from '../types/force.ts';
 import { MultiChannelSmoother } from '../analytics/smoothing.ts';
 import { OnlineEffortDetector } from '../analytics/segmentation.ts';
 import { analyzeEffortSamples } from '../analytics/metrics.ts';
 import { rawToKg } from '../calibration/CalibrationProfile.ts';
+import { remapMeasurementToCanonicalFingers } from '../constants/fingers.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
 import { useAppStore } from '../stores/appStore.ts';
@@ -16,6 +17,7 @@ export class SamplePipeline {
   private detector: OnlineEffortDetector;
   private sampleCounter = 0;
   private rawAutoswitchDone = false;
+  private measurementHand: Hand | null = null;
 
   constructor() {
     const settings = useAppStore.getState().settings;
@@ -59,6 +61,7 @@ export class SamplePipeline {
     this.source = source;
     this.sampleCounter = 0;
     this.rawAutoswitchDone = false;
+    this.measurementHand = null;
     this.smoother.reset();
     this.detector.reset();
     useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds);
@@ -82,6 +85,7 @@ export class SamplePipeline {
     this.detector.reset();
     this.smoother.reset();
     this.rawAutoswitchDone = false;
+    this.measurementHand = null;
     useDeviceStore.getState().setSource(null);
     useDeviceStore.getState().setConnected(false);
   }
@@ -97,15 +101,21 @@ export class SamplePipeline {
     let settings = useAppStore.getState().settings;
     this.maybeAutoSwitchToRaw(acq.values, settings);
     settings = useAppStore.getState().settings;
+    const measurementHand = this.resolveMeasurementHand();
+    this.syncMeasurementHand(measurementHand);
 
     // Calibration (raw → kg)
-    let kgValues: Finger4 = acq.values;
+    const channelRaw = acq.values;
+    let kgValues: Finger4 = channelRaw;
     if (settings.inputMode === 'MODE_RAW') {
-      kgValues = rawToKg(settings.calibration, acq.values);
+      kgValues = rawToKg(settings.calibration, channelRaw);
     }
+    // Normalize all force data to canonical anatomical order exactly once here.
+    const rawByFinger = remapMeasurementToCanonicalFingers(measurementHand, channelRaw);
+    const kgByFinger = remapMeasurementToCanonicalFingers(measurementHand, kgValues);
 
     // Smoothing
-    const kgSmoothed = this.smoother.apply(kgValues);
+    const kgSmoothed = this.smoother.apply(kgByFinger);
     const rawTotal = kgSmoothed[0] + kgSmoothed[1] + kgSmoothed[2] + kgSmoothed[3];
     const tareRequired = rawTotal <= -1 || kgSmoothed.some(v => v <= -1);
     const kgClamped: Finger4 = [
@@ -117,14 +127,14 @@ export class SamplePipeline {
 
     const forceSample: ForceSample = {
       tMs: acq.tMs,
-      raw: acq.values,
+      raw: rawByFinger,
       kg: kgClamped,
     };
 
     const liveStore = useLiveStore.getState();
 
     // Push to ring buffer
-    liveStore.pushSample(forceSample, { tareRequired });
+    liveStore.pushSample(forceSample, { tareRequired, channelRaw });
 
     // Recording
     if (liveStore.recording) {
@@ -160,6 +170,19 @@ export class SamplePipeline {
       this.finalizeCurrentEffort();
     }
   };
+
+  private resolveMeasurementHand(): Hand {
+    const live = useLiveStore.getState();
+    return live.recordingHand ?? live.measurementHandOverride ?? useAppStore.getState().hand;
+  }
+
+  private syncMeasurementHand(hand: Hand): void {
+    if (this.measurementHand === hand) return;
+    this.measurementHand = hand;
+    this.smoother.reset();
+    this.detector.reset();
+    useLiveStore.getState().clearEffortAccum();
+  }
 
   private maybeAutoSwitchToRaw(
     values: Finger4,

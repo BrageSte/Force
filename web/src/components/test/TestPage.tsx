@@ -3,6 +3,7 @@ import { AiTestBuilderModal } from './AiTestBuilderModal.tsx';
 import { buildAiCoachingReport } from './aiCoaching.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
+import { BilateralSummaryView } from './BilateralSummaryView.tsx';
 import { NavButton } from '../shared/NavButton.tsx';
 import { AttemptComparisonView } from './AttemptComparisonView.tsx';
 import { CustomResultDashboard } from './CustomResultDashboard.tsx';
@@ -11,6 +12,14 @@ import { FingerDetailView } from './FingerDetailView.tsx';
 import { GuidedTestScreen } from './GuidedTestScreen.tsx';
 import { ResultsScreen } from './ResultsScreen.tsx';
 import { SessionContextView } from './SessionContextView.tsx';
+import {
+  availableAnalysisHandViews,
+  buildAnalysisHandContext,
+  defaultAnalysisHandView,
+  normalizeAnalysisHandView,
+  resultForAnalysisHand,
+  type AnalysisHandView,
+} from './handAnalysis.ts';
 import { buildSessionComparison } from './testAnalysis.ts';
 import {
   createDefaultCustomTemplate,
@@ -66,6 +75,7 @@ export function TestPage() {
   const [alternateHands, setAlternateHands] = useState(false);
   const [runtimeAlternateHands, setRuntimeAlternateHands] = useState(false);
   const [currentResult, setCurrentResult] = useState<CompletedTestResult | null>(null);
+  const [analysisHandPreference, setAnalysisHandPreference] = useState<AnalysisHandView | null>(null);
   const [history, setHistory] = useState<CompletedTestResult[]>(() => loadTestResults());
   const [customTemplates, setCustomTemplates] = useState<CustomTestTemplate[]>(() => loadCustomTemplates());
   const [builderState, setBuilderState] = useState<BuilderState | null>(null);
@@ -106,10 +116,66 @@ export function TestPage() {
     return findLatestResult(profileHistory, currentResult.protocolId, otherHand(currentResult.hand));
   }, [currentResult, profileHistory]);
 
-  const aiCoachingReport = useMemo(() => {
-    if (!settings.aiCoachingEnabled || !currentResult || currentResult.protocolKind !== 'builtin') return null;
-    return buildAiCoachingReport(currentResult, profileHistory);
-  }, [currentResult, profileHistory, settings.aiCoachingEnabled]);
+  const analysisHandContext = useMemo(
+    () => buildAnalysisHandContext(currentResult, oppositeResult),
+    [currentResult, oppositeResult],
+  );
+
+  const analysisHandViews = useMemo(
+    () => availableAnalysisHandViews(analysisHandContext),
+    [analysisHandContext],
+  );
+
+  const analysisDefaultView = useMemo(
+    () => defaultAnalysisHandView(analysisHandContext),
+    [analysisHandContext],
+  );
+
+  const analysisHandView = useMemo(
+    () => normalizeAnalysisHandView(analysisHandPreference ?? analysisDefaultView, analysisHandContext),
+    [analysisDefaultView, analysisHandContext, analysisHandPreference],
+  );
+
+  const selectedAnalysisResult = useMemo(() => {
+    if (analysisHandView === 'both') return null;
+    return resultForAnalysisHand(analysisHandView, analysisHandContext);
+  }, [analysisHandContext, analysisHandView]);
+
+  const selectedOppositeHandResult = useMemo(() => {
+    if (analysisHandView === 'both' || !selectedAnalysisResult) return null;
+    return selectedAnalysisResult.hand === 'Left'
+      ? analysisHandContext.rightResult
+      : analysisHandContext.leftResult;
+  }, [analysisHandContext.leftResult, analysisHandContext.rightResult, analysisHandView, selectedAnalysisResult]);
+
+  const selectedSessionResults = useMemo(() => {
+    if (!selectedAnalysisResult) return [];
+    const dateKey = getSessionDateKey(selectedAnalysisResult.completedAtIso);
+    return listResultsForDate(profileHistory, dateKey, selectedAnalysisResult.hand);
+  }, [profileHistory, selectedAnalysisResult]);
+
+  const leftSessionResults = useMemo(() => {
+    if (!analysisHandContext.leftResult) return [];
+    return listResultsForDate(
+      profileHistory,
+      getSessionDateKey(analysisHandContext.leftResult.completedAtIso),
+      'Left',
+    );
+  }, [analysisHandContext.leftResult, profileHistory]);
+
+  const rightSessionResults = useMemo(() => {
+    if (!analysisHandContext.rightResult) return [];
+    return listResultsForDate(
+      profileHistory,
+      getSessionDateKey(analysisHandContext.rightResult.completedAtIso),
+      'Right',
+    );
+  }, [analysisHandContext.rightResult, profileHistory]);
+
+  const selectedAiCoachingReport = useMemo(() => {
+    if (!settings.aiCoachingEnabled || !selectedAnalysisResult || selectedAnalysisResult.protocolKind !== 'builtin') return null;
+    return buildAiCoachingReport(selectedAnalysisResult, profileHistory);
+  }, [profileHistory, selectedAnalysisResult, settings.aiCoachingEnabled]);
 
   const persistTemplate = (template: CustomTestTemplate): CustomTestTemplate => {
     const all = upsertCustomTemplate(template);
@@ -162,7 +228,15 @@ export function TestPage() {
     const all = [...historyBeforeSave, ...enrichedResults];
     saveTestResults(all);
     setHistory(all);
-    setCurrentResult(enrichedResults.find(item => item.hand === hand) ?? enrichedResults[0] ?? null);
+    const nextCurrentResult = enrichedResults.find(item => item.hand === hand) ?? enrichedResults[0] ?? null;
+    setCurrentResult(nextCurrentResult);
+    setAnalysisHandPreference(
+      nextCurrentResult?.hand === 'Left'
+        ? 'left'
+        : nextCurrentResult?.hand === 'Right'
+          ? 'right'
+          : null,
+    );
     setView('results');
   };
 
@@ -172,6 +246,7 @@ export function TestPage() {
     setActiveTargetKg(null);
     setActiveOppositeBestPeakKg(null);
     setCurrentResult(null);
+    setAnalysisHandPreference(null);
     setRuntimeAlternateHands(false);
   };
 
@@ -315,27 +390,127 @@ export function TestPage() {
             </button>
           </div>
 
-          {view === 'results' && (
+          <div className="bg-surface rounded-xl border border-border p-4 flex flex-wrap items-center gap-3">
+            <div className="min-w-[180px]">
+              <div className="text-sm font-semibold">Hand Analysis</div>
+              <div className="text-xs text-muted mt-1">
+                Switch between left, right, or both hands to compare force profiles after the test.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(['left', 'right', 'both'] as const).map(option => {
+                const available = analysisHandViews.includes(option);
+                const label = option === 'left' ? 'Left' : option === 'right' ? 'Right' : 'Both';
+                return (
+                  <button
+                    key={option}
+                    onClick={() => available && setAnalysisHandPreference(option)}
+                    disabled={!available}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      analysisHandView === option
+                        ? 'border-transparent bg-primary text-white'
+                        : 'border-border bg-surface-alt text-muted hover:text-text disabled:opacity-40 disabled:hover:text-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex-1" />
+            {analysisHandContext.leftResult && (
+              <div className="text-[11px] text-muted">
+                Left {new Date(analysisHandContext.leftResult.completedAtIso).toLocaleString()}
+              </div>
+            )}
+            {analysisHandContext.rightResult && (
+              <div className="text-[11px] text-muted">
+                Right {new Date(analysisHandContext.rightResult.completedAtIso).toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          {view === 'results' && analysisHandView === 'both' && analysisHandContext.leftResult && analysisHandContext.rightResult && (
+            <BilateralSummaryView
+              leftResult={analysisHandContext.leftResult}
+              rightResult={analysisHandContext.rightResult}
+            />
+          )}
+          {view === 'results' && analysisHandView !== 'both' && selectedAnalysisResult && (
             <ResultsScreen
-              result={currentResult}
-              aiCoachingReport={aiCoachingReport}
+              key={selectedAnalysisResult.resultId}
+              result={selectedAnalysisResult}
+              aiCoachingReport={selectedAiCoachingReport}
               onOpenComparison={() => setView('compare')}
               onOpenFinger={() => setView('finger')}
               onOpenSession={() => setView('session')}
               onBackToLibrary={resetToLibrary}
             />
           )}
-          {view === 'compare' && <AttemptComparisonView result={currentResult} />}
-          {view === 'finger' && (
+          {view === 'compare' && analysisHandView === 'both' && analysisHandContext.leftResult && analysisHandContext.rightResult && (
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+              <HandAnalysisPanel result={analysisHandContext.leftResult} description="Latest left-hand attempt analysis for this protocol.">
+                <AttemptComparisonView result={analysisHandContext.leftResult} />
+              </HandAnalysisPanel>
+              <HandAnalysisPanel result={analysisHandContext.rightResult} description="Latest right-hand attempt analysis for this protocol.">
+                <AttemptComparisonView result={analysisHandContext.rightResult} />
+              </HandAnalysisPanel>
+            </div>
+          )}
+          {view === 'compare' && analysisHandView !== 'both' && selectedAnalysisResult && (
+            <AttemptComparisonView key={selectedAnalysisResult.resultId} result={selectedAnalysisResult} />
+          )}
+          {view === 'finger' && analysisHandView === 'both' && analysisHandContext.leftResult && analysisHandContext.rightResult && (
+            <div className="space-y-3">
+              <div className="bg-surface rounded-xl border border-border p-4 text-sm text-muted">
+                Compare the same anatomical fingers between hands. Each panel keeps its own finger selection, so you can inspect matching fingers side by side.
+              </div>
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                <HandAnalysisPanel result={analysisHandContext.leftResult} description="Finger-by-finger detail for the left hand.">
+                  <FingerDetailView
+                    key={analysisHandContext.leftResult.resultId}
+                    result={analysisHandContext.leftResult}
+                    oppositeHandResult={analysisHandContext.rightResult}
+                  />
+                </HandAnalysisPanel>
+                <HandAnalysisPanel result={analysisHandContext.rightResult} description="Finger-by-finger detail for the right hand.">
+                  <FingerDetailView
+                    key={analysisHandContext.rightResult.resultId}
+                    result={analysisHandContext.rightResult}
+                    oppositeHandResult={analysisHandContext.leftResult}
+                  />
+                </HandAnalysisPanel>
+              </div>
+            </div>
+          )}
+          {view === 'finger' && analysisHandView !== 'both' && selectedAnalysisResult && (
             <FingerDetailView
-              result={currentResult}
-              oppositeHandResult={oppositeResult}
+              key={selectedAnalysisResult.resultId}
+              result={selectedAnalysisResult}
+              oppositeHandResult={selectedOppositeHandResult}
             />
           )}
-          {view === 'session' && (
+          {view === 'session' && analysisHandView === 'both' && analysisHandContext.leftResult && analysisHandContext.rightResult && (
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+              <HandAnalysisPanel result={analysisHandContext.leftResult} description="Session context for the left-hand result date.">
+                <SessionContextView
+                  currentResult={analysisHandContext.leftResult}
+                  sessionResults={leftSessionResults}
+                />
+              </HandAnalysisPanel>
+              <HandAnalysisPanel result={analysisHandContext.rightResult} description="Session context for the right-hand result date.">
+                <SessionContextView
+                  currentResult={analysisHandContext.rightResult}
+                  sessionResults={rightSessionResults}
+                />
+              </HandAnalysisPanel>
+            </div>
+          )}
+          {view === 'session' && analysisHandView !== 'both' && selectedAnalysisResult && (
             <SessionContextView
-              currentResult={currentResult}
-              sessionResults={sessionResults}
+              key={selectedAnalysisResult.resultId}
+              currentResult={selectedAnalysisResult}
+              sessionResults={selectedSessionResults}
             />
           )}
         </div>
@@ -344,3 +519,29 @@ export function TestPage() {
   );
 }
 
+function HandAnalysisPanel({
+  result,
+  description,
+  children,
+}: {
+  result: CompletedTestResult;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="bg-surface rounded-xl border border-border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">{result.hand} Hand</h3>
+            <p className="text-xs text-muted mt-1">{description}</p>
+          </div>
+          <div className="text-xs text-muted">
+            {new Date(result.completedAtIso).toLocaleString()}
+          </div>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}

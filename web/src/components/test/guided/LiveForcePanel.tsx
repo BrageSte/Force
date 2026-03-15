@@ -1,7 +1,8 @@
-import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR } from '../../../constants/fingers.ts';
-import type { Finger4 } from '../../../types/force.ts';
+import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR, displayFingerOrder } from '../../../constants/fingers.ts';
+import type { Finger4, Hand } from '../../../types/force.ts';
 
 interface LiveForcePanelProps {
+  hand: Hand;
   latestTotalKg: number;
   latestKg: Finger4;
   tareRequired: boolean;
@@ -11,6 +12,7 @@ interface LiveForcePanelProps {
 }
 
 export function LiveForcePanel({
+  hand,
   latestTotalKg,
   latestKg,
   tareRequired,
@@ -18,6 +20,8 @@ export function LiveForcePanel({
   hasMeaningfulLoad,
   onTare,
 }: LiveForcePanelProps) {
+  const order = displayFingerOrder(hand);
+
   return (
     <div className="bg-surface rounded-xl border border-border p-4">
       <div className="flex items-start justify-between gap-3">
@@ -43,9 +47,9 @@ export function LiveForcePanel({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 mt-4">
-        {FINGER_NAMES.map((name, i) => (
-          <div key={name} className="bg-surface-alt rounded-lg p-2">
-            <div className="text-[11px] text-muted">{name}</div>
+        {order.map(i => (
+          <div key={FINGER_NAMES[i]} className="bg-surface-alt rounded-lg p-2">
+            <div className="text-[11px] text-muted">{FINGER_NAMES[i]}</div>
             <div className="text-sm font-semibold tabular-nums" style={{ color: FINGER_COLORS[i] }}>
               {latestKg[i].toFixed(1)} kg
             </div>

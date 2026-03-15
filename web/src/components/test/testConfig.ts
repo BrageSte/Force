@@ -105,12 +105,12 @@ export const MODALITY_OPTIONS: Array<{ value: WorkoutModality; label: string }> 
 ];
 
 export const BENCHMARK_CATEGORY_LABELS: Record<BenchmarkCategory, string> = {
-  max_strength: 'A. Max Strength Benchmark',
-  repeated_max_strength: 'B. Repeated Max Strength Benchmark',
-  recruitment_rfd: 'C. Recruitment / RFD Benchmark',
-  strength_endurance: 'D. Strength-Endurance / Repeater Benchmark',
-  health_capacity: 'E. Health / Capacity Benchmark',
-  force_curve: 'F. Individual Force Curve Benchmark',
+  max_strength: 'Max Strength',
+  repeated_max_strength: 'Repeated Max Strength',
+  recruitment_rfd: 'Recruitment / RFD',
+  strength_endurance: 'Strength-Endurance / Repeater',
+  health_capacity: 'Health / Capacity',
+  force_curve: 'Individual Force Curve',
 };
 
 export const HAND_MODE_OPTIONS: Array<{ value: HandMode; label: string }> = [

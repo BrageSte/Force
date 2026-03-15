@@ -59,7 +59,7 @@ describe('sample pipeline integration', () => {
 
     expect(useDeviceStore.getState().connected).toBe(true)
 
-    useLiveStore.getState().startRecording()
+    useLiveStore.getState().startRecording('Right')
     source.emit({ tMs: 0, values: [200000, 180000, 160000, 150000] })
     source.emit({ tMs: 20, values: [200100, 180100, 160100, 150100] })
 
@@ -71,6 +71,53 @@ describe('sample pipeline integration', () => {
         message.includes('Switched to MODE_RAW automatically'),
       ),
     ).toBe(true)
+  })
+
+  it('maps left-hand channel order into canonical finger order before live display and recording', async () => {
+    resetAllStores({ inputMode: 'MODE_KG_DIRECT', smoothingMode: 'NONE' })
+    useAppStore.getState().setHand('Left')
+
+    const source = new FakeSource()
+    await pipeline.connect(source)
+
+    useLiveStore.getState().startRecording('Left')
+    source.emit({ tMs: 0, values: [1, 2, 3, 4] })
+
+    const live = useLiveStore.getState()
+    expect(live.latestChannelRaw).toEqual([1, 2, 3, 4])
+    expect(live.latestRaw).toEqual([4, 3, 2, 1])
+    expect(live.latestMeasuredKg).toEqual([4, 3, 2, 1])
+    expect(live.recordedSamples[0]?.raw).toEqual([4, 3, 2, 1])
+    expect(live.recordedSamples[0]?.kg).toEqual([4, 3, 2, 1])
+  })
+
+  it('uses the measurement hand override for guided capture mappings', async () => {
+    resetAllStores({ inputMode: 'MODE_KG_DIRECT', smoothingMode: 'NONE' })
+    useAppStore.getState().setHand('Right')
+    useLiveStore.getState().setMeasurementHandOverride('Left')
+
+    const source = new FakeSource()
+    await pipeline.connect(source)
+    source.emit({ tMs: 0, values: [5, 6, 7, 8] })
+
+    expect(useLiveStore.getState().latestMeasuredKg).toEqual([8, 7, 6, 5])
+  })
+
+  it('applies a new hand mapping on the very first sample after a hand switch', async () => {
+    resetAllStores({ inputMode: 'MODE_KG_DIRECT', smoothingMode: 'NONE' })
+    useAppStore.getState().setHand('Right')
+
+    const source = new FakeSource()
+    await pipeline.connect(source)
+
+    useLiveStore.getState().setMeasurementHandOverride('Left')
+    source.emit({ tMs: 0, values: [1, 2, 3, 4] })
+    expect(useLiveStore.getState().latestMeasuredKg).toEqual([4, 3, 2, 1])
+
+    useLiveStore.getState().setMeasurementHandOverride('Right')
+    source.emit({ tMs: 20, values: [10, 20, 30, 40] })
+
+    expect(useLiveStore.getState().latestMeasuredKg).toEqual([10, 20, 30, 40])
   })
 
   it('routes tare through the shared device command workflow', () => {

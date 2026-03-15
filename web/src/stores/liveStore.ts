@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Finger4, ForceSample, EffortMetrics } from '../types/force.ts';
+import type { Finger4, ForceSample, EffortMetrics, Hand } from '../types/force.ts';
 import { loadSettings } from '../storage/settingsStore.ts';
 
 function bufferCapacityForSeconds(seconds: number): number {
@@ -32,6 +32,7 @@ interface LiveState {
 
   // Latest measured sample before display gating
   latestRaw: Finger4;
+  latestChannelRaw: Finger4;
   latestMeasuredKg: Finger4;
   latestMeasuredTotalKg: number;
   latestMeasuredPct: Finger4;
@@ -48,6 +49,8 @@ interface LiveState {
   recordedSamples: ForceSample[];
   recordedEfforts: EffortMetrics[];
   recordingStartedIso: string | null;
+  recordingHand: Hand | null;
+  measurementHandOverride: Hand | null;
 
   // Current effort accumulation
   currentEffortSamples: ForceSample[];
@@ -56,16 +59,17 @@ interface LiveState {
   _recentTimes: number[];
 
   // Actions
-  pushSample: (s: ForceSample, meta?: { tareRequired?: boolean }) => void;
+  pushSample: (s: ForceSample, meta?: { tareRequired?: boolean; channelRaw?: Finger4 }) => void;
   setCurrentEffort: (e: EffortMetrics | null) => void;
   setLastEffort: (e: EffortMetrics | null) => void;
-  startRecording: () => void;
+  startRecording: (hand: Hand) => void;
   stopRecording: () => void;
   appendRecordedSample: (s: ForceSample) => void;
   addRecordedEffort: (e: EffortMetrics) => void;
   startEffortAccum: (s: ForceSample) => void;
   appendEffortSample: (s: ForceSample) => void;
   clearEffortAccum: () => void;
+  setMeasurementHandOverride: (hand: Hand | null) => void;
   setBufferSeconds: (seconds: number) => void;
   resetSession: () => void;
 }
@@ -85,6 +89,7 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   latestPct: [0, 0, 0, 0],
   hasMeaningfulLoad: false,
   latestRaw: [0, 0, 0, 0],
+  latestChannelRaw: [0, 0, 0, 0],
   latestMeasuredKg: [0, 0, 0, 0],
   latestMeasuredTotalKg: 0,
   latestMeasuredPct: [0, 0, 0, 0],
@@ -99,6 +104,8 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   recordedSamples: [],
   recordedEfforts: [],
   recordingStartedIso: null,
+  recordingHand: null,
+  measurementHandOverride: null,
   currentEffortSamples: [],
 
   pushSample: (s: ForceSample, meta) => {
@@ -150,6 +157,7 @@ export const useLiveStore = create<LiveState>((set, get) => ({
       writePos: state.writePos + 1,
       bufferLength: Math.min(state.writePos + 1, state.capacity),
       latestRaw: s.raw,
+      latestChannelRaw: meta?.channelRaw ?? s.raw,
       latestMeasuredKg: clampedKg,
       latestMeasuredTotalKg: clampedTotal,
       latestMeasuredPct: measuredPct,
@@ -166,11 +174,12 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   setCurrentEffort: (e) => set({ currentEffort: e }),
   setLastEffort: (e) => set({ lastEffort: e }),
 
-  startRecording: () => set({
+  startRecording: (hand) => set({
     recording: true,
     recordedSamples: [],
     recordedEfforts: [],
     recordingStartedIso: new Date().toISOString(),
+    recordingHand: hand,
   }),
 
   stopRecording: () => set({ recording: false }),
@@ -191,6 +200,8 @@ export const useLiveStore = create<LiveState>((set, get) => ({
 
   clearEffortAccum: () => set({ currentEffortSamples: [], currentEffort: null }),
 
+  setMeasurementHandOverride: (hand) => set({ measurementHandOverride: hand }),
+
   setBufferSeconds: (seconds) => {
     const capacity = bufferCapacityForSeconds(seconds);
     set({
@@ -209,6 +220,7 @@ export const useLiveStore = create<LiveState>((set, get) => ({
     currentEffort: null,
     lastEffort: null,
     latestRaw: [0, 0, 0, 0],
+    latestChannelRaw: [0, 0, 0, 0],
     latestMeasuredKg: [0, 0, 0, 0],
     latestMeasuredTotalKg: 0,
     latestMeasuredPct: [0, 0, 0, 0],
@@ -219,6 +231,8 @@ export const useLiveStore = create<LiveState>((set, get) => ({
     recordedSamples: [],
     recordedEfforts: [],
     recordingStartedIso: null,
+    recordingHand: null,
+    measurementHandOverride: null,
     currentEffortSamples: [],
     _recentTimes: [],
     hasMeaningfulLoad: false,

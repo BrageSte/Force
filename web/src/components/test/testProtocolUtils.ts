@@ -1,5 +1,5 @@
 import { DEFAULT_COMPARE_METRIC } from './testConfig.ts';
-import { latestStandardMaxPeakKg } from './testStorage.ts';
+import { resolveBenchmarkReference, type BenchmarkReferenceProfileLike } from '../../profile/benchmarkReferences.ts';
 import type {
   CompareTagSnapshot,
   CompletedTestResult,
@@ -107,15 +107,20 @@ export function resolveTargetKg(
   protocol: TestProtocol,
   history: CompletedTestResult[],
   hand: Hand,
-  profile?: ProfileSnapshot | null,
+  profile?: (ProfileSnapshot & BenchmarkReferenceProfileLike) | null,
 ): number | null {
   if (protocol.targetMode === 'fixed_kg') {
     return protocol.fixedTargetKg ?? null;
   }
   if (protocol.targetMode === 'relative_to_max' || protocol.targetMode === 'percent_of_known_max') {
-    const maxPeak = latestStandardMaxPeakKg(history, hand);
-    if (!maxPeak || !protocol.defaultTargetPctOfMax) return null;
-    return maxPeak * protocol.defaultTargetPctOfMax;
+    const reference = resolveBenchmarkReference({
+      results: history,
+      profile,
+      benchmarkId: 'standard_max',
+      hand,
+    });
+    if (reference.activeKg === null || !protocol.defaultTargetPctOfMax) return null;
+    return reference.activeKg * protocol.defaultTargetPctOfMax;
   }
   if (protocol.targetMode === 'bodyweight_relative') {
     if (!profile?.weightKg || !protocol.bodyweightMultiplier) return null;

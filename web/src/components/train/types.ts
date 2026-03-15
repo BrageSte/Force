@@ -99,6 +99,10 @@ export interface TrainRepSample {
 }
 
 export interface TrainRepResult {
+  sequenceSetNo?: number;
+  blockId?: string;
+  blockLabel?: string;
+  blockPhase?: TrainBlock['phase'];
   setNo: number;
   repNo: number;
   plannedHangSec: number;

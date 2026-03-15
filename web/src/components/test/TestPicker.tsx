@@ -163,7 +163,7 @@ export function TestPicker({
                           key={protocol.id}
                           onClick={() => onSelect({ kind: 'builtin', id: protocol.id })}
                           className={`text-left bg-surface rounded-xl border p-4 transition-colors ${
-                            selectedCard ? 'border-primary' : 'border-border hover:border-primary/40'
+                            selectedCard ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -177,15 +177,15 @@ export function TestPicker({
                           </div>
 
                           <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-                            <div className="bg-surface-alt rounded-lg p-2">
+                            <div className="bg-surface-alt rounded-lg px-3 py-2">
                               <div className="text-muted">Duration</div>
                               <div className="font-semibold mt-0.5">{protocol.durationSec}s</div>
                             </div>
-                            <div className="bg-surface-alt rounded-lg p-2">
+                            <div className="bg-surface-alt rounded-lg px-3 py-2">
                               <div className="text-muted">Sets</div>
                               <div className="font-semibold mt-0.5">{protocol.attemptCount}</div>
                             </div>
-                            <div className="bg-surface-alt rounded-lg p-2">
+                            <div className="bg-surface-alt rounded-lg px-3 py-2">
                               <div className="text-muted">Rest</div>
                               <div className="font-semibold mt-0.5">{protocol.restSec}s</div>
                             </div>
@@ -245,7 +245,7 @@ export function TestPicker({
                         }
                       }}
                       className={`text-left bg-surface rounded-xl border p-4 transition-colors cursor-pointer ${
-                        selectedCard ? 'border-primary' : 'border-border hover:border-primary/40'
+                        selectedCard ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -261,19 +261,19 @@ export function TestPicker({
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
-                        <div className="bg-surface-alt rounded-lg p-2">
+                        <div className="bg-surface-alt rounded-lg px-3 py-2">
                           <div className="text-muted">Family</div>
                           <div className="font-semibold mt-0.5">{testFamilyLabel(template.family)}</div>
                         </div>
-                        <div className="bg-surface-alt rounded-lg p-2">
+                        <div className="bg-surface-alt rounded-lg px-3 py-2">
                           <div className="text-muted">Sets</div>
                           <div className="font-semibold mt-0.5">{template.attemptCount}</div>
                         </div>
-                        <div className="bg-surface-alt rounded-lg p-2">
+                        <div className="bg-surface-alt rounded-lg px-3 py-2">
                           <div className="text-muted">Work</div>
                           <div className="font-semibold mt-0.5">{template.workSec}s</div>
                         </div>
-                        <div className="bg-surface-alt rounded-lg p-2">
+                        <div className="bg-surface-alt rounded-lg px-3 py-2">
                           <div className="text-muted">Intervals</div>
                           <div className="font-semibold mt-0.5">{intervalLabel}</div>
                         </div>
@@ -308,7 +308,7 @@ export function TestPicker({
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl border border-border p-5 space-y-4 self-start">
+        <div className="bg-surface rounded-xl border border-border p-5 space-y-4 self-start xl:sticky xl:top-4">
           {selectedBuiltIn ? (
             <>
               <div>
@@ -362,7 +362,7 @@ export function TestPicker({
           <button
             onClick={onStart}
             disabled={!connected}
-            className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-40"
+            className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-40"
           >
             Start Guided Test
           </button>

@@ -5,6 +5,7 @@ import { loadTestResults } from '../test/testStorage.ts';
 import { bestPeakOfResult } from '../test/testAnalysis.ts';
 import { listTrainingSessions } from '../train/trainStorage.ts';
 import { HistoryCompareWorkspace } from './HistoryCompareWorkspace.tsx';
+import { HistoryTestAnalysisWorkspace } from './HistoryTestAnalysisWorkspace.tsx';
 import { NavButton } from '../shared/NavButton.tsx';
 import { EmptyState } from '../shared/EmptyState.tsx';
 import { formatDateTime } from '../shared/formatDateTime.ts';
@@ -17,7 +18,7 @@ interface HistoryPageProps {
 }
 
 type HistoryView = 'sessions' | 'tests' | 'training';
-type TestHistoryView = 'list' | 'compare';
+type TestHistoryView = 'list' | 'compare' | 'analysis';
 
 export function HistoryPage({ onNavigate }: HistoryPageProps) {
   const sessions = useAppStore(s => s.sessions);
@@ -26,6 +27,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
   const loadSession = useAppStore(s => s.loadSession);
   const [view, setView] = useState<HistoryView>('sessions');
   const [testView, setTestView] = useState<TestHistoryView>('list');
+  const [selectedTestResultId, setSelectedTestResultId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<CompletedTestResult[]>(() => loadTestResults());
   const [trainingSessions, setTrainingSessions] = useState<TrainSessionMeta[]>([]);
 
@@ -132,13 +134,20 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
 
       {view === 'tests' && (
         <div className="space-y-3">
-          <div className="bg-surface rounded-xl border border-border p-2 flex gap-2 flex-wrap">
+        <div className="bg-surface rounded-xl border border-border p-2 flex gap-2 flex-wrap">
             <NavButton active={testView === 'list'} onClick={() => setTestView('list')} label="List" />
             <NavButton active={testView === 'compare'} onClick={() => setTestView('compare')} label="Compare" />
+            <NavButton active={testView === 'analysis'} onClick={() => setTestView('analysis')} label="Analysis" />
           </div>
 
           {testView === 'compare' ? (
             <HistoryCompareWorkspace results={filteredTestResults} />
+          ) : testView === 'analysis' ? (
+            <HistoryTestAnalysisWorkspace
+              results={filteredTestResults}
+              selectedResultId={selectedTestResultId}
+              onSelectResult={setSelectedTestResultId}
+            />
           ) : filteredTestResults.length === 0 ? (
             <EmptyState message="No test results for this profile yet." />
           ) : (
@@ -151,6 +160,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
                     <th className="px-4 py-2.5 text-left">Hand</th>
                     <th className="px-4 py-2.5 text-right">Target</th>
                     <th className="px-4 py-2.5 text-right">Peak</th>
+                    <th className="px-4 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,6 +171,17 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
                       <td className="px-4 py-2.5 text-muted">{result.hand}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{result.targetKg ? `${result.targetKg.toFixed(1)} kg` : 'n/a'}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{bestPeakOfResult(result).toFixed(1)} kg</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedTestResultId(result.resultId);
+                            setTestView('analysis');
+                          }}
+                          className="px-2 py-1 rounded-lg text-xs font-medium bg-primary/15 text-primary hover:bg-primary/20 transition-colors"
+                        >
+                          Analyze
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -207,4 +228,3 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
     </div>
   );
 }
-

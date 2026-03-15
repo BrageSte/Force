@@ -6,6 +6,10 @@ describe('profile storage and snapshots', () => {
   it('creates and persists profiles with active selection', () => {
     const first = createProfile('Alice')
     const second = createProfile('Bob')
+    second.benchmarkReferences.standard_max = {
+      Left: { manualKg: 48, preferredSource: 'manual' },
+      Right: { manualKg: null, preferredSource: 'test' },
+    }
 
     saveProfiles([first, second])
     saveActiveProfileId(second.profileId)
@@ -15,6 +19,8 @@ describe('profile storage and snapshots', () => {
     expect(loadActiveProfileId(loaded)).toBe(second.profileId)
     expect(loaded[0].name).toBe('Alice')
     expect(loaded[1].name).toBe('Bob')
+    expect(loaded[1].benchmarkReferences.standard_max?.Left.manualKg).toBe(48)
+    expect(loaded[1].benchmarkReferences.standard_max?.Left.preferredSource).toBe('manual')
   })
 
   it('round-trips profile snapshots for session and test records', () => {
@@ -32,5 +38,6 @@ describe('profile storage and snapshots', () => {
     expect(hydrated?.name).toBe('Athlete')
     expect(hydrated?.injuredFingers[1]).toBe(true)
     expect(hydrated?.injuryNotes).toContain('middle finger')
+    expect(snapshot).not.toHaveProperty('benchmarkReferences')
   })
 })

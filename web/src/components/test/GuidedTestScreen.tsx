@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
-import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR } from '../../constants/fingers.ts';
+import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR, displayFingerOrder } from '../../constants/fingers.ts';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
 import { LIVE_PANEL_CATALOG, livePanelLabel } from './testConfig.ts';
 import type { AttemptSample, CompletedTestResult, TestProtocol, TestRunnerPhase } from './types.ts';
@@ -116,6 +116,16 @@ export function GuidedTestScreen({
     setVisibleLivePanels(protocol.livePanels);
   }, [protocol]);
 
+  const applyMeasurementHand = useCallback((nextHand: Hand) => {
+    activeHandRef.current = nextHand;
+    useLiveStore.getState().setMeasurementHandOverride(nextHand);
+  }, []);
+
+  const syncActiveHand = useCallback((nextHand: Hand) => {
+    applyMeasurementHand(nextHand);
+    setActiveHand(nextHand);
+  }, [applyMeasurementHand]);
+
   const setTimedPhase = useCallback((next: TestRunnerPhase, durationMs: number) => {
     const now = performance.now();
     setPhase(next);
@@ -126,13 +136,13 @@ export function GuidedTestScreen({
 
   const moveToNextAttempt = useCallback((nextHand: Hand) => {
     const now = performance.now();
-    setActiveHand(nextHand);
+    syncActiveHand(nextHand);
     setQueuedHand(null);
     setPhase('next_attempt');
     setPhaseStartedAtMs(now);
     setPhaseDurationMs(0);
     setClockMs(now);
-  }, []);
+  }, [syncActiveHand]);
 
   const finishTest = useCallback(
     (finalAttemptsByHand: Record<Hand, AttemptSample[][]>) => {
@@ -210,15 +220,17 @@ export function GuidedTestScreen({
 
   const startCountdown = useCallback(() => {
     const currentHand = activeHandRef.current;
+    applyMeasurementHand(currentHand);
     if (!startedAtIsoRef.current[currentHand]) {
       startedAtIsoRef.current[currentHand] = new Date().toISOString();
     }
     countdownCueRef.current = null;
     void ensureAudioContext();
     setTimedPhase('countdown', protocol.countdownSec * 1000);
-  }, [ensureAudioContext, protocol.countdownSec, setTimedPhase]);
+  }, [applyMeasurementHand, ensureAudioContext, protocol.countdownSec, setTimedPhase]);
 
   const startLiveAttempt = useCallback(() => {
+    applyMeasurementHand(activeHandRef.current);
     currentSamplesRef.current = [];
     const now = performance.now();
     attemptStartAtMsRef.current = now;
@@ -226,7 +238,7 @@ export function GuidedTestScreen({
     lastCaptureMsRef.current = 0;
     setLivePreview([]);
     setTimedPhase('live_effort', protocol.durationSec * 1000);
-  }, [protocol.durationSec, setTimedPhase]);
+  }, [applyMeasurementHand, protocol.durationSec, setTimedPhase]);
 
   const completeLiveAttempt = useCallback(() => {
     const captured = currentSamplesRef.current.slice();
@@ -391,6 +403,14 @@ export function GuidedTestScreen({
   const canTare = connected && phase !== 'countdown' && phase !== 'live_effort' && phase !== 'hold_complete';
   const visiblePanelSet = useMemo(() => new Set(visibleLivePanels), [visibleLivePanels]);
   const hasTargetPanel = visiblePanelSet.has('target') && protocol.targetMode !== 'none';
+  const activeFingerOrder = useMemo(() => displayFingerOrder(activeHand), [activeHand]);
+  const liveFingerTraces = useMemo(
+    () => activeFingerOrder.map(fingerIndex => ({
+      fingerIndex,
+      values: livePreview.map(sample => sample.fingerKg[fingerIndex]),
+    })),
+    [activeFingerOrder, livePreview],
+  );
   const leftPanelsSelected = LIVE_PANEL_CATALOG.filter(panel => panel.slot === 'left' && visiblePanelSet.has(panel.id));
   const showSplitLayout = leftPanelsSelected.length > 0;
   const renderedRightPanelCount =
@@ -442,6 +462,13 @@ export function GuidedTestScreen({
   }
   if (phase === 'next_attempt') phaseHint = 'Re-tare if needed, then start the next countdown.';
   if (phase === 'finished') phaseHint = 'Test complete.';
+
+  useEffect(() => {
+    applyMeasurementHand(hand);
+    return () => {
+      useLiveStore.getState().setMeasurementHandOverride(null);
+    };
+  }, [applyMeasurementHand, hand]);
 
   return (
     <div className="space-y-4">
@@ -611,7 +638,7 @@ export function GuidedTestScreen({
                 </div>
               ) : (
                 <div className="mt-2 rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-warning">
-                  No known max reference was found, so this target is currently unavailable.
+                  No active max reference was found for this profile and hand, so this target is currently unavailable.
                 </div>
               )}
             </div>
@@ -619,6 +646,7 @@ export function GuidedTestScreen({
 
           {visiblePanelSet.has('live_force') && (
             <LiveForcePanel
+              hand={activeHand}
               latestTotalKg={latestTotalKg}
               latestKg={latestKg}
               tareRequired={tareRequired}
@@ -633,10 +661,10 @@ export function GuidedTestScreen({
               <div className="text-xs text-muted uppercase tracking-wide mb-3">Contribution</div>
               {hasMeaningfulLoad ? (
                 <div className="space-y-2">
-                  {FINGER_NAMES.map((name, i) => (
-                    <div key={name}>
+                  {activeFingerOrder.map(i => (
+                    <div key={FINGER_NAMES[i]}>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted">{name}</span>
+                        <span className="text-muted">{FINGER_NAMES[i]}</span>
                         <span className="tabular-nums" style={{ color: FINGER_COLORS[i] }}>
                           {latestPct[i].toFixed(1)}%
                         </span>
@@ -684,15 +712,63 @@ export function GuidedTestScreen({
                     />
                   </>
                 )}
+                {liveFingerTraces.map(trace => (
+                  <polyline
+                    key={FINGER_NAMES[trace.fingerIndex]}
+                    fill="none"
+                    stroke={FINGER_COLORS[trace.fingerIndex]}
+                    strokeWidth="1.5"
+                    strokeOpacity="0.95"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    points={polylinePath(trace.values, 640, 220, chartMax)}
+                  />
+                ))}
                 <polyline
                   fill="none"
                   stroke={TOTAL_COLOR}
-                  strokeWidth="2"
+                  strokeWidth="2.4"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
                   points={polylinePath(liveTotals, 640, 220, chartMax)}
                 />
               </svg>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-2.5 py-1 text-text">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TOTAL_COLOR }} />
+                  Total
+                </span>
+                {liveFingerTraces.map(trace => (
+                  <span key={`legend-${FINGER_NAMES[trace.fingerIndex]}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-2.5 py-1 text-text">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: FINGER_COLORS[trace.fingerIndex] }} />
+                    {FINGER_NAMES[trace.fingerIndex]}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Array.from({ length: protocol.attemptCount }, (_, index) => {
+                  const attemptNo = index + 1;
+                  const completedCount = attemptsByHand[activeHand].length;
+                  const active = currentAttemptNo === attemptNo && phase !== 'finished';
+                  const done = completedCount >= attemptNo;
+                  return (
+                    <span
+                      key={`attempt-${attemptNo}`}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${
+                        done
+                          ? 'border-success/30 bg-success/10 text-success'
+                          : active
+                            ? 'border-primary/30 bg-primary/10 text-primary'
+                            : 'border-border bg-surface-alt text-muted'
+                      }`}
+                    >
+                      Attempt {attemptNo}
+                    </span>
+                  );
+                })}
+              </div>
               <div className="mt-2 text-xs text-muted">
-                Force below 1.0 kg is flattened to zero so you do not see idle noise or false percentage swings.
+                Total force and each finger are overlaid so takeover and drift show up during the pull. Force below 1.0 kg is flattened to zero so idle noise stays hidden.
               </div>
             </div>
           )}

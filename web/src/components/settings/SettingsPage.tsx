@@ -3,7 +3,7 @@ import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import type { SmoothingMode, InputMode } from '../../types/settings.ts';
 import { pipeline } from '../../pipeline/SamplePipeline.ts';
-import { FINGER_NAMES } from '../../constants/fingers.ts';
+import { FINGER_NAMES, channelIndexForFinger, channelNumberForFinger, displayOrder } from '../../constants/fingers.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { calibrateFinger, serializeDeviceCommand, streamModeForInputMode, type DeviceCommand } from '@krimblokk/core';
 import { Section } from '../shared/Section.tsx';
@@ -12,9 +12,10 @@ import { FormRow } from '../shared/FormField.tsx';
 export function SettingsPage() {
   const settings = useAppStore(s => s.settings);
   const updateSettings = useAppStore(s => s.updateSettings);
+  const hand = useAppStore(s => s.hand);
   const connected = useDeviceStore(s => s.connected);
   const statusMessages = useDeviceStore(s => s.statusMessages);
-  const latestRaw = useLiveStore(s => s.latestRaw);
+  const latestChannelRaw = useLiveStore(s => s.latestChannelRaw);
   const latestMeasuredTotalKg = useLiveStore(s => s.latestMeasuredTotalKg);
   const [knownKgInputs, setKnownKgInputs] = useState(['', '', '', '']);
 
@@ -23,6 +24,7 @@ export function SettingsPage() {
     () => streamModeForInputMode(settings.inputMode),
     [settings.inputMode],
   );
+  const fingerOrder = useMemo(() => displayOrder(hand), [hand]);
 
   const sendDeviceCommand = (command: DeviceCommand) => {
     const text = serializeDeviceCommand(command);
@@ -47,7 +49,7 @@ export function SettingsPage() {
 
   const handleRawTareAll = () => {
     const nextCalibration = {
-      offsets: [...latestRaw],
+      offsets: [...latestChannelRaw],
       scales: [...settings.calibration.scales],
     };
     updateSettings({ calibration: nextCalibration });
@@ -59,6 +61,8 @@ export function SettingsPage() {
   };
 
   const handleCalibrationAction = (idx: number) => {
+    const channelIndex = channelIndexForFinger(hand, idx);
+    const channelNumber = channelNumberForFinger(hand, idx);
     const knownKg = parseFloat(knownKgInputs[idx]);
     if (!Number.isFinite(knownKg) || knownKg <= 0) {
       useDeviceStore.getState().addStatus(`Calibration skipped for ${FINGER_NAMES[idx]}: known kg must be > 0`);
@@ -68,7 +72,7 @@ export function SettingsPage() {
     if (!isRawMode) {
       sendDeviceCommand({
         kind: 'calibrate_channel',
-        channel: (idx + 1) as 1 | 2 | 3 | 4,
+        channel: channelNumber,
         knownKg,
       });
       return;
@@ -77,16 +81,16 @@ export function SettingsPage() {
     try {
       const nextCalibration = calibrateFinger(
         settings.calibration,
-        idx,
-        settings.calibration.offsets[idx] ?? 0,
-        latestRaw[idx],
+        channelIndex,
+        settings.calibration.offsets[channelIndex] ?? 0,
+        latestChannelRaw[channelIndex],
         knownKg,
       );
       updateSettings({ calibration: nextCalibration });
-      useDeviceStore.getState().addStatus(`App-side calibration updated for ${FINGER_NAMES[idx]}`);
+      useDeviceStore.getState().addStatus(`App-side calibration updated for ${FINGER_NAMES[idx]} (CH${channelNumber})`);
     } catch (error) {
       useDeviceStore.getState().addStatus(
-        `Calibration failed for ${FINGER_NAMES[idx]}: ${error instanceof Error ? error.message : String(error)}`,
+        `Calibration failed for ${FINGER_NAMES[idx]} (CH${channelNumber}): ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   };
@@ -103,6 +107,11 @@ export function SettingsPage() {
         <div className="mb-4 rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs text-muted">
           Active stream request: <span className="font-semibold text-text">{activeStreamMode.toUpperCase()}</span>
           {' '}| Live measured total: <span className="font-semibold text-text">{latestMeasuredTotalKg.toFixed(2)} kg</span>
+        </div>
+        <div className="mb-4 rounded-lg border border-border bg-bg px-3 py-3 text-xs text-muted">
+          Active hand mapping:
+          {' '}
+          {fingerOrder.map(fingerIndex => `${FINGER_NAMES[fingerIndex]} = CH${channelNumberForFinger(hand, fingerIndex)}`).join(' | ')}
         </div>
         <div className="flex gap-2 flex-wrap mb-4">
           <button
@@ -149,37 +158,45 @@ export function SettingsPage() {
             <div className="font-medium text-text mb-2">App-side raw calibration</div>
             <div>Step 1: connect with no load and press `Capture App Tare`.</div>
             <div>Step 2: apply a known mass on one finger and press `Calibrate` on that finger.</div>
-            <div>Current raw sample: [{latestRaw.map(value => value.toFixed(0)).join(', ')}]</div>
+            <div>
+              Current raw channels:
+              {' '}
+              {latestChannelRaw.map((value, index) => `CH${index + 1} ${value.toFixed(0)}`).join(' | ')}
+            </div>
           </div>
         )}
 
         {/* Per-channel calibration */}
         <div className="space-y-2">
-          {FINGER_NAMES.map((name, i) => (
-            <div key={i} className="grid grid-cols-[64px_96px_1fr_auto] items-center gap-3">
-              <span className="text-xs text-muted">{name}</span>
+          {fingerOrder.map((fingerIndex) => {
+            const channelIndex = channelIndexForFinger(hand, fingerIndex);
+            const channelNumber = channelIndex + 1;
+            return (
+            <div key={fingerIndex} className="grid grid-cols-[96px_96px_1fr_auto] items-center gap-3">
+              <span className="text-xs text-muted">{FINGER_NAMES[fingerIndex]} (CH{channelNumber})</span>
               <input
                 type="number"
                 placeholder="Known kg"
                 step="0.1"
-                value={knownKgInputs[i]}
-                onChange={e => handleKnownKgChange(i, e.target.value)}
+                value={knownKgInputs[fingerIndex]}
+                onChange={e => handleKnownKgChange(fingerIndex, e.target.value)}
                 className="bg-surface-alt border border-border rounded-lg px-2 py-1 text-sm w-24 text-text"
               />
               <div className="text-[11px] text-muted">
                 {isRawMode
-                  ? `Offset ${settings.calibration.offsets[i].toFixed(1)} | Scale ${settings.calibration.scales[i].toExponential(3)}`
-                  : 'Firmware-side channel calibration'}
+                  ? `Offset ${settings.calibration.offsets[channelIndex].toFixed(1)} | Scale ${settings.calibration.scales[channelIndex].toExponential(3)}`
+                  : `Firmware-side channel calibration on CH${channelNumber}`}
               </div>
               <button
-                onClick={() => handleCalibrationAction(i)}
+                onClick={() => handleCalibrationAction(fingerIndex)}
                 disabled={!connected}
                 className="px-2 py-1 rounded text-xs bg-primary/15 text-primary disabled:opacity-40"
               >
                 Calibrate
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </Section>
 
@@ -307,4 +324,3 @@ export function SettingsPage() {
     </div>
   );
 }
-

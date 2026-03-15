@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FINGER_COLORS, FINGER_NAMES } from '../../constants/fingers.ts';
+import { FINGER_COLORS, FINGER_NAMES, displayOrder } from '../../constants/fingers.ts';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
 import { sendTareCommand } from '../../live/sessionWorkflow.ts';
+import {
+  benchmarkReferenceSourceDescription,
+  benchmarkReferenceSourceLabel,
+  type BenchmarkReferenceResolution,
+} from '../../profile/benchmarkReferences.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import type { Hand, ProfileSnapshot } from '../../types/force.ts';
@@ -28,6 +33,7 @@ interface GuidedTrainScreenProps {
   bodyweightRelativeTarget: number | null;
   benchmarkSourceId?: string;
   benchmarkSourceLabel?: string;
+  benchmarkReference: BenchmarkReferenceResolution | null;
   previousResult: TrainSessionResult | null;
   recommendation: TrainRecommendation | null;
   latestBenchmark: CompletedTestResult | null;
@@ -60,6 +66,7 @@ export function GuidedTrainScreen({
   bodyweightRelativeTarget,
   benchmarkSourceId,
   benchmarkSourceLabel,
+  benchmarkReference,
   previousResult,
   recommendation,
   latestBenchmark,
@@ -84,6 +91,20 @@ export function GuidedTrainScreen({
   const [completedReps, setCompletedReps] = useState<TrainRepResult[]>([]);
   const [startedAtIso, setStartedAtIso] = useState<string | null>(null);
   const [resolvedTargetKg, setResolvedTargetKg] = useState(targetKg);
+  const liveForceLabel = targetMode === 'manual'
+    ? 'Manual target'
+    : targetMode === 'auto_from_first_set'
+      ? (resolvedTargetKg > 0 ? `Learned from first set (${resolvedTargetKg.toFixed(1)} kg)` : 'Learning from first set')
+      : targetMode === 'bodyweight_relative'
+        ? `${bodyweightRelativeTarget?.toFixed(2) ?? '--'} x bodyweight`
+        : sourceMaxKg !== null && benchmarkReference?.effectiveSource
+          ? `Auto from ${sourceMaxKg.toFixed(1)} kg ${benchmarkReferenceSourceLabel(benchmarkReference.effectiveSource)} reference`
+          : sourceMaxKg !== null
+            ? `Auto from ${sourceMaxKg.toFixed(1)} kg benchmark`
+            : 'Auto target';
+  const liveForceReferenceDetail = benchmarkReference?.effectiveSource
+    ? `${benchmarkReferenceSourceDescription(benchmarkReference.effectiveSource)}${benchmarkReference.usedFallback ? ' via fallback' : ''}`
+    : null;
 
   const phaseRef = useRef<TrainRunnerPhase>('ready');
   const currentStepIndexRef = useRef(-1);
@@ -114,6 +135,17 @@ export function GuidedTrainScreen({
   useEffect(() => {
     setResolvedTargetKg(targetKg);
   }, [targetKg]);
+  const fingerOrder = useMemo(() => displayOrder(hand), [hand]);
+
+  useEffect(() => {
+    useLiveStore.getState().setMeasurementHandOverride(hand);
+  }, [hand]);
+
+  useEffect(() => {
+    return () => {
+      useLiveStore.getState().setMeasurementHandOverride(null);
+    };
+  }, []);
 
   const setTimedPhase = useCallback((nextPhase: TrainRunnerPhase, durationMs: number) => {
     const now = performance.now();
@@ -136,6 +168,10 @@ export function GuidedTrainScreen({
       : 0;
 
     return {
+      sequenceSetNo: step.sequenceSetNo,
+      blockId: step.blockId,
+      blockLabel: step.blockLabel,
+      blockPhase: step.blockPhase,
       setNo: step.setNo,
       repNo: step.repNo,
       plannedHangSec: step.durationSec,
@@ -353,7 +389,7 @@ export function GuidedTrainScreen({
             <div>
               <div className="text-xs uppercase tracking-wide text-muted">Session Progress</div>
               <div className="text-sm font-semibold mt-1">
-                {currentStep ? `${currentStep.blockLabel} · set ${currentStep.setNo} rep ${currentStep.repNo}` : phase === 'countdown' ? 'Starting session' : 'Ready to start'}
+                {currentStep ? `${currentStep.blockLabel} · set ${currentStep.sequenceSetNo} rep ${currentStep.repNo}` : phase === 'countdown' ? 'Starting session' : 'Ready to start'}
               </div>
             </div>
             <div className="text-right">
@@ -398,15 +434,7 @@ export function GuidedTrainScreen({
                   {latestMeasuredTotalKg.toFixed(1)}
                 </div>
                 <div className="text-xs text-muted mt-1">
-                  {targetMode === 'manual'
-                    ? 'Manual target'
-                    : targetMode === 'auto_from_first_set'
-                      ? (resolvedTargetKg > 0 ? `Learned from first set (${resolvedTargetKg.toFixed(1)} kg)` : 'Learning from first set')
-                    : targetMode === 'bodyweight_relative'
-                      ? `${bodyweightRelativeTarget?.toFixed(2) ?? '--'} x bodyweight`
-                      : sourceMaxKg !== null
-                        ? `Auto from ${sourceMaxKg.toFixed(1)} kg benchmark`
-                        : 'Auto target'}
+                  {liveForceLabel}
                 </div>
                 <div className="mt-3">
                   <TargetBandGauge value={latestMeasuredTotalKg} targetKg={resolvedTargetKg > 0 ? resolvedTargetKg : targetKg} disabled={targetMode === 'auto_from_first_set' && resolvedTargetKg <= 0} />
@@ -415,6 +443,11 @@ export function GuidedTrainScreen({
                   <span>Benchmark</span>
                   <span>{benchmarkSourceLabel ?? latestBenchmark?.protocolName ?? 'Manual / custom'}</span>
                 </div>
+                {liveForceReferenceDetail && (
+                  <div className="mt-2 text-xs text-muted">
+                    Reference: {liveForceReferenceDetail}
+                  </div>
+                )}
                 <button onClick={() => sendTareCommand('Tare command sent from v1.5 train runner')} disabled={!connected || phase === 'work'} className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-semibold bg-surface border border-border text-text disabled:opacity-30">
                   Tare
                 </button>
@@ -445,10 +478,10 @@ export function GuidedTrainScreen({
               )}
             </div>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {FINGER_NAMES.map((name, index) => (
+              {fingerOrder.map(index => (
                 <FingerMeter
-                  key={name}
-                  label={name}
+                  key={FINGER_NAMES[index]}
+                  label={FINGER_NAMES[index]}
                   color={FINGER_COLORS[index]}
                   kg={latestMeasuredKg[index]}
                   pct={latestMeasuredPct[index]}
@@ -502,6 +535,7 @@ export function GuidedTrainScreen({
             <thead>
               <tr className="bg-surface-alt text-muted text-xs uppercase tracking-wide">
                 <th className="px-4 py-2.5 text-left">Set</th>
+                <th className="px-4 py-2.5 text-left">Block</th>
                 <th className="px-4 py-2.5 text-left">Rep</th>
                 <th className="px-4 py-2.5 text-right">Hang</th>
                 <th className="px-4 py-2.5 text-right">Avg</th>
@@ -512,8 +546,9 @@ export function GuidedTrainScreen({
             </thead>
             <tbody>
               {completedReps.map(rep => (
-                <tr key={`${rep.setNo}-${rep.repNo}`} className="border-t border-border">
-                  <td className="px-4 py-2.5">{rep.setNo}</td>
+                <tr key={`${rep.sequenceSetNo ?? rep.setNo}-${rep.repNo}-${rep.blockId ?? 'set'}`} className="border-t border-border">
+                  <td className="px-4 py-2.5">{rep.sequenceSetNo ?? rep.setNo}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted">{rep.blockLabel ?? 'Workout block'}</td>
                   <td className="px-4 py-2.5">{rep.repNo}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{rep.actualHangS.toFixed(1)}s</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{rep.avgHoldKg.toFixed(1)} kg</td>

@@ -29,6 +29,8 @@ export function buildCompletedResults({
   attemptsByHand,
   startedAtIsoByHand,
 }: BuildCompletedResultsArgs): CompletedTestResult | CompletedTestResult[] {
+  // Guided capture stores per-finger data in canonical anatomical order for both
+  // hands, so result assembly must not re-map fingers here.
   const primaryAttempts = attemptsByHand[hand];
   const secondaryAttempts = attemptsByHand[secondaryHand];
   const primaryOppositeBest = alternateHands

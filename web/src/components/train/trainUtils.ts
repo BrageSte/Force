@@ -1,6 +1,11 @@
 import type { SafetyFlag, SessionComparisonDelta, TacticalGripProfile } from '@krimblokk/core';
 import type { Hand, ProfileSnapshot } from '../../types/force.ts';
-import { bestPeakOfResult } from '../test/testAnalysis.ts';
+import {
+  benchmarkReferenceSourceDescription,
+  resolveBenchmarkReference,
+  type BenchmarkReferenceProfileLike,
+  type BenchmarkReferenceResolution,
+} from '../../profile/benchmarkReferences.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import type {
   CustomTrainWorkout,
@@ -20,6 +25,7 @@ export interface TrainTargetResolution {
   bodyweightRelativeTarget: number | null;
   benchmarkSourceId?: string;
   benchmarkSourceLabel?: string;
+  benchmarkReference: BenchmarkReferenceResolution | null;
   reason: 'auto' | 'bodyweight' | 'absolute' | 'manual_required';
   rationale: string[];
 }
@@ -27,6 +33,7 @@ export interface TrainTargetResolution {
 export interface TrainTimelineStep {
   kind: 'work' | 'rest' | 'set_rest';
   durationSec: number;
+  sequenceSetNo: number;
   setNo: number;
   repNo: number;
   blockId: string;
@@ -44,15 +51,27 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function findLatestBenchmarkResult(
-  results: CompletedTestResult[],
-  benchmarkId: string | undefined,
+function benchmarkLabel(
+  protocol: TrainProtocol | CustomTrainWorkout,
+  benchmarkId: string,
+  reference: BenchmarkReferenceResolution,
+): string {
+  return reference.latestTestResult?.protocolName ?? protocol.benchmarkSourceLabel ?? benchmarkId;
+}
+
+function benchmarkReferenceRationale(
+  protocol: TrainProtocol | CustomTrainWorkout,
+  benchmarkId: string,
   hand: Hand,
-): CompletedTestResult | null {
-  if (!benchmarkId) return null;
-  return results
-    .filter(result => result.protocolId === benchmarkId && result.hand === hand)
-    .sort((a, b) => b.completedAtIso.localeCompare(a.completedAtIso))[0] ?? null;
+  percent: number,
+  reference: BenchmarkReferenceResolution,
+): string {
+  const label = benchmarkLabel(protocol, benchmarkId, reference);
+  const sourceText = benchmarkReferenceSourceDescription(reference.effectiveSource);
+  if (reference.usedFallback) {
+    return `Target is ${(percent * 100).toFixed(0)}% of the ${sourceText} for ${label.toLowerCase()} on ${hand.toLowerCase()} hand after ${reference.preferredSource === 'manual' ? 'manual profile value' : 'latest TEST result'} was unavailable.`;
+  }
+  return `Target is ${(percent * 100).toFixed(0)}% of the ${sourceText} for ${label.toLowerCase()} on ${hand.toLowerCase()} hand.`;
 }
 
 export function formatGripSpec(gripType: TrainProtocol['gripType'], modality: TrainProtocol['modality']): string {
@@ -74,7 +93,7 @@ export function resolveTrainTarget(
   protocol: TrainProtocol | CustomTrainWorkout,
   results: CompletedTestResult[],
   hand: Hand,
-  profile?: ProfileSnapshot | null,
+  profile?: (ProfileSnapshot & BenchmarkReferenceProfileLike) | null,
 ): TrainTargetResolution {
   const logic = protocol.targetLogic;
   if (logic.mode === 'absolute_kg' && logic.absoluteKg && logic.absoluteKg > 0) {
@@ -85,6 +104,7 @@ export function resolveTrainTarget(
       bodyweightRelativeTarget: null,
       benchmarkSourceId: protocol.benchmarkSourceId,
       benchmarkSourceLabel: protocol.benchmarkSourceLabel,
+      benchmarkReference: null,
       reason: 'absolute',
       rationale: ['Workout uses a fixed absolute kg target.'],
     };
@@ -99,6 +119,7 @@ export function resolveTrainTarget(
       bodyweightRelativeTarget: logic.bodyweightMultiplier,
       benchmarkSourceId: protocol.benchmarkSourceId,
       benchmarkSourceLabel: protocol.benchmarkSourceLabel,
+      benchmarkReference: null,
       reason: 'bodyweight',
       rationale: [`Target resolves to ${logic.bodyweightMultiplier.toFixed(2)} x bodyweight.`],
     };
@@ -106,21 +127,38 @@ export function resolveTrainTarget(
 
   if (logic.mode === 'pct_latest_benchmark' && logic.percent && logic.percent > 0) {
     const benchmarkId = logic.benchmarkId ?? protocol.benchmarkSourceId ?? 'standard_max';
-    const sourceResult = findLatestBenchmarkResult(results, benchmarkId, hand)
-      ?? findLatestBenchmarkResult(results, 'standard_max', hand);
-    if (sourceResult) {
-      const sourceMaxKg = bestPeakOfResult(sourceResult);
+    const reference = resolveBenchmarkReference({
+      results,
+      profile,
+      benchmarkId,
+      hand,
+    });
+    if (reference.activeKg !== null) {
+      const sourceMaxKg = reference.activeKg;
       return {
         mode: 'auto_from_latest_test',
         targetKg: Number((sourceMaxKg * logic.percent).toFixed(2)),
         sourceMaxKg,
         bodyweightRelativeTarget: null,
-        benchmarkSourceId: sourceResult.protocolId,
-        benchmarkSourceLabel: sourceResult.protocolName,
+        benchmarkSourceId: benchmarkId,
+        benchmarkSourceLabel: benchmarkLabel(protocol, benchmarkId, reference),
+        benchmarkReference: reference,
         reason: 'auto',
-        rationale: [`Target is ${(logic.percent * 100).toFixed(0)}% of the latest ${sourceResult.protocolName.toLowerCase()} for ${hand.toLowerCase()} hand.`],
+        rationale: [benchmarkReferenceRationale(protocol, benchmarkId, hand, logic.percent, reference)],
       };
     }
+
+    return {
+      mode: 'manual',
+      targetKg: null,
+      sourceMaxKg: null,
+      bodyweightRelativeTarget: null,
+      benchmarkSourceId: benchmarkId,
+      benchmarkSourceLabel: protocol.benchmarkSourceLabel ?? benchmarkId,
+      benchmarkReference: reference,
+      reason: 'manual_required',
+      rationale: ['No active benchmark reference was found for this profile, benchmark, and hand, so manual target entry is required.'],
+    };
   }
 
   return {
@@ -130,6 +168,7 @@ export function resolveTrainTarget(
     bodyweightRelativeTarget: null,
     benchmarkSourceId: protocol.benchmarkSourceId,
     benchmarkSourceLabel: protocol.benchmarkSourceLabel,
+    benchmarkReference: null,
     reason: 'manual_required',
     rationale: ['No matching benchmark was found for this profile and hand, so manual target entry is required.'],
   };
@@ -141,13 +180,16 @@ export function plannedRepCount(blocks: TrainBlock[]): number {
 
 export function buildTrainTimeline(blocks: TrainBlock[]): TrainTimelineStep[] {
   const timeline: TrainTimelineStep[] = [];
+  let sequenceSetNo = 0;
 
   for (const block of blocks) {
     for (let setNo = 1; setNo <= block.setCount; setNo += 1) {
+      sequenceSetNo += 1;
       for (let repNo = 1; repNo <= block.repsPerSet; repNo += 1) {
         timeline.push({
           kind: 'work',
           durationSec: block.hangSec,
+          sequenceSetNo,
           setNo,
           repNo,
           blockId: block.id,
@@ -163,6 +205,7 @@ export function buildTrainTimeline(blocks: TrainBlock[]): TrainTimelineStep[] {
           timeline.push({
             kind: 'rest',
             durationSec: block.restBetweenRepsSec,
+            sequenceSetNo,
             setNo,
             repNo,
             blockId: block.id,
@@ -174,6 +217,7 @@ export function buildTrainTimeline(blocks: TrainBlock[]): TrainTimelineStep[] {
           timeline.push({
             kind: 'set_rest',
             durationSec: block.restBetweenSetsSec,
+            sequenceSetNo,
             setNo,
             repNo,
             blockId: block.id,
@@ -336,4 +380,3 @@ export function scoreRepAdherence(totalKg: number, targetKg: number): number {
   const deltaPct = Math.abs(totalKg - targetKg) / targetKg;
   return clamp(100 - deltaPct * 100, 0, 100);
 }
-

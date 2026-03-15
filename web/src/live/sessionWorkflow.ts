@@ -19,7 +19,7 @@ export async function saveCurrentRecordingAsSession(): Promise<SessionPayload | 
   }
 
   const settings = useAppStore.getState().settings;
-  const appHand = useAppStore.getState().hand;
+  const appHand = live.recordingHand ?? live.measurementHandOverride ?? useAppStore.getState().hand;
   const activeProfile = useAppStore.getState().profiles.find(
     profile => profile.profileId === useAppStore.getState().activeProfileId,
   ) ?? null;

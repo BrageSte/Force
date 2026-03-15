@@ -6,6 +6,7 @@ import { listTrainingSessions } from '../train/trainStorage.ts';
 import { EmptyState } from '../shared/EmptyState.tsx';
 import { formatDateTime } from '../shared/formatDateTime.ts';
 import type { CompletedTestResult } from '../test/types.ts';
+import { ProfileBenchmarkReferencesSection } from './ProfileBenchmarkReferencesSection.tsx';
 import type { TrainSessionMeta } from '../train/types.ts';
 import { ProfileEditorSection } from './ProfileEditorSection.tsx';
 
@@ -61,6 +62,11 @@ export function ProfilePage() {
       </div>
 
       <ProfileEditorSection />
+      <ProfileBenchmarkReferencesSection
+        key={`${activeProfile?.profileId ?? 'none'}:${activeProfile?.updatedAtIso ?? 'none'}`}
+        activeProfile={activeProfile}
+        testResults={profileTests}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard
@@ -164,4 +170,3 @@ function StatCard({ label, value, detail }: { label: string; value: string; deta
     </div>
   );
 }
-

@@ -13,10 +13,12 @@ export class WebSerialSource implements DataSource {
 
   private port: SerialPort | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  private writeQueue: Promise<void> = Promise.resolve();
   private running = false;
   private lineBuffer = '';
   private baudRate: number;
   private requestedStreamMode: DeviceStreamMode;
+  private readonly textEncoder = new TextEncoder();
 
   onSample: ((s: AcquisitionSample) => void) | null = null;
   onStatus: ((msg: string) => void) | null = null;
@@ -76,6 +78,8 @@ export class WebSerialSource implements DataSource {
       this.reader = null;
     }
 
+    await this.writeQueue.catch(() => {});
+
     if (this.port) {
       try {
         await this.port.close();
@@ -103,12 +107,27 @@ export class WebSerialSource implements DataSource {
 
   sendCommand(cmd: string): void {
     if (!this.port?.writable) return;
-    const writer = this.port.writable.getWriter();
-    const encoded = new TextEncoder().encode(cmd.trim() + '\n');
-    void writer
-      .write(encoded)
+    const encoded = this.textEncoder.encode(cmd.trim() + '\n');
+
+    this.writeQueue = this.writeQueue
       .catch(() => {})
-      .finally(() => writer.releaseLock());
+      .then(async () => {
+        const writable = this.port?.writable;
+        if (!writable) return;
+
+        const writer = writable.getWriter();
+        try {
+          await writer.write(encoded);
+        } finally {
+          writer.releaseLock();
+        }
+      });
+
+    void this.writeQueue.catch(error => {
+      if (this.running) {
+        this.onStatus?.(`Serial write error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
   }
 
   private async readLoop(): Promise<void> {
