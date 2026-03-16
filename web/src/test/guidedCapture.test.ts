@@ -26,6 +26,10 @@ const protocol: TestProtocol = {
   targetMode: 'none',
   targetIntensityLogic: 'Free pull for capture validation.',
   stopConditions: [],
+  capabilityRequirements: {
+    requiresTotalForce: true,
+    requiresPerFingerForce: false,
+  },
   warmup: [],
   cooldown: [],
   scoringModel: 'None',

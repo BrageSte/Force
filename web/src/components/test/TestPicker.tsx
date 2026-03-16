@@ -24,6 +24,7 @@ interface TestPickerProps {
   onEditCustom: (template: CustomTestTemplate) => void;
   onDuplicateCustom: (template: CustomTestTemplate) => void;
   onDeleteCustom: (template: CustomTestTemplate) => void;
+  startDisabledReason: string | null;
 }
 
 function tierClass(tier: string): string {
@@ -57,6 +58,7 @@ export function TestPicker({
   onEditCustom,
   onDuplicateCustom,
   onDeleteCustom,
+  startDisabledReason,
 }: TestPickerProps) {
   const selectedBuiltIn = selectedRef.kind === 'builtin'
     ? TEST_LIBRARY.find(protocol => protocol.id === selectedRef.id) ?? TEST_LIBRARY[0]
@@ -361,11 +363,16 @@ export function TestPicker({
 
           <button
             onClick={onStart}
-            disabled={!connected}
+            disabled={!connected || Boolean(startDisabledReason)}
             className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-40"
           >
             Start Guided Test
           </button>
+          {startDisabledReason && (
+            <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning">
+              {startDisabledReason}
+            </div>
+          )}
         </div>
       </div>
     </div>

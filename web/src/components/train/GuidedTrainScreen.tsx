@@ -9,7 +9,8 @@ import {
 } from '../../profile/benchmarkReferences.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
-import type { Hand, ProfileSnapshot } from '../../types/force.ts';
+import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
+import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import { useAudioCuePlayer } from '../test/guided/audioCues.ts';
 import { buildTrainSessionResult, buildTrainTimeline, formatGripSpec, plannedRepCount, scoreRepAdherence } from './trainUtils.ts';
@@ -73,11 +74,16 @@ export function GuidedTrainScreen({
   onComplete,
   onCancel,
 }: GuidedTrainScreenProps) {
-  const latestMeasuredKg = useLiveStore(s => s.latestMeasuredKg);
-  const latestMeasuredPct = useLiveStore(s => s.latestMeasuredPct);
+  const zeroFinger: Finger4 = [0, 0, 0, 0];
+  const latestMeasuredKg = useLiveStore(s => s.latestMeasuredKg) ?? zeroFinger;
+  const latestMeasuredPct = useLiveStore(s => s.latestMeasuredPct) ?? zeroFinger;
   const latestMeasuredTotalKg = useLiveStore(s => s.latestMeasuredTotalKg);
   const tareRequired = useLiveStore(s => s.tareRequired);
   const connected = useDeviceStore(s => s.connected);
+  const sourceKind = useDeviceStore(s => s.sourceKind);
+  const activeDevice = useDeviceStore(s => s.activeDevice);
+  const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
+  const device = activeDevice ?? defaultConnectedDevice(sourceKind);
 
   const timeline = useMemo(() => buildTrainTimeline(protocol.blocks), [protocol.blocks]);
   const totalPlannedReps = useMemo(() => plannedRepCount(protocol.blocks), [protocol.blocks]);
@@ -190,6 +196,7 @@ export function GuidedTrainScreen({
       protocol,
       profile,
       hand,
+      device,
       startedAtIso,
       targetMode,
       targetKg: resolvedTargetKg,
@@ -332,8 +339,8 @@ export function GuidedTrainScreen({
     currentSamplesRef.current.push({
       tMs: elapsedMs,
       totalKg: live.latestMeasuredTotalKg,
-      fingerKg: live.latestMeasuredKg,
-      fingerPct: live.latestMeasuredPct,
+      fingerKg: live.latestMeasuredKg ?? zeroFinger,
+      fingerPct: live.latestMeasuredPct ?? zeroFinger,
       targetKg: resolvedTargetKg > 0 ? resolvedTargetKg : targetKg,
     });
   });
@@ -363,6 +370,9 @@ export function GuidedTrainScreen({
           <h2 className="text-xl font-semibold mt-1">{protocol.name}</h2>
           <p className="text-xs text-muted mt-1">
             {profile?.name ?? 'Unknown profile'} | {hand} hand | {formatGripSpec(protocol.gripType, protocol.modality)}
+          </p>
+          <p className="text-xs text-muted mt-1">
+            {device.deviceLabel} · {capabilitySummary(device.capabilities)}
           </p>
         </div>
         <div className="flex-1" />
@@ -469,7 +479,9 @@ export function GuidedTrainScreen({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted">Finger Contribution</div>
-                <div className="text-sm font-semibold mt-1">Live per-finger load and share</div>
+                <div className="text-sm font-semibold mt-1">
+                  {perFingerForce ? 'Live per-finger load and share' : 'Unavailable on this device'}
+                </div>
               </div>
               {recommendation && (
                 <span className="px-2 py-1 rounded-full text-[10px] font-semibold uppercase bg-primary/15 text-primary">
@@ -477,17 +489,23 @@ export function GuidedTrainScreen({
                 </span>
               )}
             </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {fingerOrder.map(index => (
-                <FingerMeter
-                  key={FINGER_NAMES[index]}
-                  label={FINGER_NAMES[index]}
-                  color={FINGER_COLORS[index]}
-                  kg={latestMeasuredKg[index]}
-                  pct={latestMeasuredPct[index]}
-                />
-              ))}
-            </div>
+            {perFingerForce ? (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {fingerOrder.map(index => (
+                  <FingerMeter
+                    key={FINGER_NAMES[index]}
+                    label={FINGER_NAMES[index]}
+                    color={FINGER_COLORS[index]}
+                    kg={latestMeasuredKg[index]}
+                    pct={latestMeasuredPct[index]}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-border bg-surface px-3 py-3 text-sm text-muted">
+                This device provides total force only, so per-finger contribution is hidden.
+              </div>
+            )}
           </div>
         </div>
 

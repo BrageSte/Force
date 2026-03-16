@@ -1,5 +1,5 @@
 import type { EffortMetrics, Finger4, ForceSample } from './types.ts';
-import { KG_TO_N } from './types.ts';
+import { KG_TO_N, totalKg } from './types.ts';
 
 export interface AnalysisConfig {
   tutThresholdKg: number;
@@ -21,7 +21,7 @@ function interpAtMs(timesMs: number[], values: number[], targetMs: number): numb
   if (targetMs >= timesMs[timesMs.length - 1]) return values[values.length - 1];
 
   let idx = 0;
-  for (let i = 0; i < timesMs.length; i++) {
+  for (let i = 0; i < timesMs.length; i += 1) {
     if (timesMs[i] >= targetMs) {
       idx = i;
       break;
@@ -49,7 +49,7 @@ function rfdKgS(timesMs: number[], totalValues: number[], t0Ms: number, windowMs
 function durationAboveThreshold(timesMs: number[], values: number[], threshold: number): number {
   if (timesMs.length < 2) return 0;
   let accMs = 0;
-  for (let i = 0; i < values.length - 1; i++) {
+  for (let i = 0; i < values.length - 1; i += 1) {
     if (values[i] >= threshold) {
       accMs += Math.max(0, timesMs[i + 1] - timesMs[i]);
     }
@@ -94,7 +94,7 @@ function loadShiftRateSeries(timesMs: number[], pctSeries: Finger4[]): { times: 
   const shift: number[] = [];
   const times: number[] = [];
 
-  for (let i = 1; i < timesMs.length; i++) {
+  for (let i = 1; i < timesMs.length; i += 1) {
     const dtSeconds = Math.max(1e-6, (timesMs[i] - timesMs[i - 1]) / 1000);
     const dp =
       Math.abs(pctSeries[i][0] - pctSeries[i - 1][0]) +
@@ -121,7 +121,7 @@ function stabilizationTimeS(
   let candidateStart: number | null = null;
   let accumMs = 0;
 
-  for (let i = 0; i < shift.length; i++) {
+  for (let i = 0; i < shift.length; i += 1) {
     if (shift[i] < threshold) {
       if (candidateStart === null) {
         candidateStart = times[i];
@@ -146,6 +146,73 @@ function zeroFinger4(): Finger4 {
   return [0, 0, 0, 0];
 }
 
+function hasPerFingerData(samples: ForceSample[]): samples is Array<ForceSample & { kg: Finger4 }> {
+  return samples.every(sample => sample.kg !== null);
+}
+
+function analyzeTotalOnlyEffort(
+  effortSamples: ForceSample[],
+  effortId: number,
+  config: AnalysisConfig,
+): EffortMetrics {
+  const timesMs = effortSamples.map(sample => sample.tMs);
+  const totals = effortSamples.map(sample => totalKg(sample));
+  const startTMs = timesMs[0];
+  const endTMs = timesMs[timesMs.length - 1];
+  const durationS = Math.max(0, (endTMs - startTMs) / 1000);
+
+  let peakIdx = 0;
+  let peakTotal = totals[0] ?? 0;
+  for (let i = 1; i < totals.length; i += 1) {
+    if (totals[i] > peakTotal) {
+      peakTotal = totals[i];
+      peakIdx = i;
+    }
+  }
+
+  const holdThreshold = config.holdPeakFraction * peakTotal;
+  let holdIdx = 0;
+  for (let i = 0; i < totals.length; i += 1) {
+    if (totals[i] >= holdThreshold) {
+      holdIdx = i;
+      break;
+    }
+  }
+
+  const holdTotalsKg = totals.slice(holdIdx);
+
+  return {
+    effortId,
+    startTMs,
+    endTMs,
+    durationS,
+    peakTotalKg: peakTotal,
+    peakPerFingerKg: null,
+    timeToPeakS: Math.max(0, (timesMs[peakIdx] - startTMs) / 1000),
+    rfd100KgS: rfdKgS(timesMs, totals, startTMs, 100),
+    rfd200KgS: rfdKgS(timesMs, totals, startTMs, 200),
+    rfd100NS: rfdKgS(timesMs, totals, startTMs, 100) * KG_TO_N,
+    rfd200NS: rfdKgS(timesMs, totals, startTMs, 200) * KG_TO_N,
+    avgTotalKg: holdTotalsKg.length > 0 ? mean(holdTotalsKg) : 0,
+    tutS: durationAboveThreshold(timesMs, totals, config.tutThresholdKg),
+    distributionDriftPerS: null,
+    steadinessTotalKg: holdTotalsKg.length > 0 ? stddev(holdTotalsKg) : 0,
+    steadinessPerFingerKg: null,
+    fingerImbalanceIndex: null,
+    loadVariationCv: null,
+    dominantSwitchCount: null,
+    loadShiftRate: null,
+    stabilizationTimeS: null,
+    ringPinkyShare: null,
+    holdStartTMs: timesMs[holdIdx] ?? startTMs,
+    holdEndTMs: endTMs,
+    detailTMs: timesMs.map(time => time - startTMs),
+    detailTotalKg: [...totals],
+    detailFingerKg: null,
+    detailFingerPct: null,
+  };
+}
+
 export function analyzeEffortSamples(
   effortSamples: ForceSample[],
   effortId: number,
@@ -158,7 +225,7 @@ export function analyzeEffortSamples(
       endTMs: 0,
       durationS: 0,
       peakTotalKg: 0,
-      peakPerFingerKg: zeroFinger4(),
+      peakPerFingerKg: null,
       timeToPeakS: 0,
       rfd100KgS: 0,
       rfd200KgS: 0,
@@ -166,57 +233,60 @@ export function analyzeEffortSamples(
       rfd200NS: 0,
       avgTotalKg: 0,
       tutS: 0,
-      distributionDriftPerS: 0,
+      distributionDriftPerS: null,
       steadinessTotalKg: 0,
-      steadinessPerFingerKg: zeroFinger4(),
-      fingerImbalanceIndex: 0,
-      loadVariationCv: 0,
-      dominantSwitchCount: 0,
-      loadShiftRate: 0,
+      steadinessPerFingerKg: null,
+      fingerImbalanceIndex: null,
+      loadVariationCv: null,
+      dominantSwitchCount: null,
+      loadShiftRate: null,
       stabilizationTimeS: null,
-      ringPinkyShare: 0,
+      ringPinkyShare: null,
       holdStartTMs: 0,
       holdEndTMs: 0,
       detailTMs: [],
       detailTotalKg: [],
-      detailFingerKg: [],
-      detailFingerPct: [],
+      detailFingerKg: null,
+      detailFingerPct: null,
     };
   }
 
   if (effortSamples.length < 2) {
     const sample = effortSamples[0];
-    const total = sample.kg[0] + sample.kg[1] + sample.kg[2] + sample.kg[3];
     return {
       effortId,
       startTMs: sample.tMs,
       endTMs: sample.tMs,
       durationS: 0,
-      peakTotalKg: total,
+      peakTotalKg: totalKg(sample),
       peakPerFingerKg: sample.kg,
       timeToPeakS: 0,
       rfd100KgS: 0,
       rfd200KgS: 0,
       rfd100NS: 0,
       rfd200NS: 0,
-      avgTotalKg: total,
+      avgTotalKg: totalKg(sample),
       tutS: 0,
-      distributionDriftPerS: 0,
+      distributionDriftPerS: sample.kg ? 0 : null,
       steadinessTotalKg: 0,
-      steadinessPerFingerKg: zeroFinger4(),
-      fingerImbalanceIndex: 0,
-      loadVariationCv: 0,
-      dominantSwitchCount: 0,
-      loadShiftRate: 0,
+      steadinessPerFingerKg: sample.kg ? zeroFinger4() : null,
+      fingerImbalanceIndex: sample.kg ? 0 : null,
+      loadVariationCv: sample.kg ? 0 : null,
+      dominantSwitchCount: sample.kg ? 0 : null,
+      loadShiftRate: sample.kg ? 0 : null,
       stabilizationTimeS: null,
-      ringPinkyShare: 0,
+      ringPinkyShare: sample.kg ? 0 : null,
       holdStartTMs: sample.tMs,
       holdEndTMs: sample.tMs,
       detailTMs: [0],
-      detailTotalKg: [total],
-      detailFingerKg: [sample.kg],
-      detailFingerPct: [zeroFinger4()],
+      detailTotalKg: [totalKg(sample)],
+      detailFingerKg: sample.kg ? [sample.kg] : null,
+      detailFingerPct: sample.kg ? [zeroFinger4()] : null,
     };
+  }
+
+  if (!hasPerFingerData(effortSamples)) {
+    return analyzeTotalOnlyEffort(effortSamples, effortId, config);
   }
 
   const timesMs = effortSamples.map(sample => sample.tMs);
@@ -229,7 +299,7 @@ export function analyzeEffortSamples(
 
   let peakIdx = 0;
   let peakTotal = totals[0];
-  for (let i = 1; i < totals.length; i++) {
+  for (let i = 1; i < totals.length; i += 1) {
     if (totals[i] > peakTotal) {
       peakTotal = totals[i];
       peakIdx = i;
@@ -244,7 +314,7 @@ export function analyzeEffortSamples(
 
   const holdThreshold = config.holdPeakFraction * peakTotal;
   let holdIdx = 0;
-  for (let i = 0; i < totals.length; i++) {
+  for (let i = 0; i < totals.length; i += 1) {
     if (totals[i] >= holdThreshold) {
       holdIdx = i;
       break;
@@ -284,7 +354,7 @@ export function analyzeEffortSamples(
     : 0;
 
   const loadVariationValues: number[] = [];
-  for (let fingerIdx = 0; fingerIdx < 4; fingerIdx++) {
+  for (let fingerIdx = 0; fingerIdx < 4; fingerIdx += 1) {
     const series = holdFingersKg.map(finger => finger[fingerIdx]);
     if (series.length === 0) {
       loadVariationValues.push(0);
@@ -303,7 +373,7 @@ export function analyzeEffortSamples(
   let previousDominant = -1;
   for (const row of allPct) {
     let dominant = 0;
-    for (let i = 1; i < row.length; i++) {
+    for (let i = 1; i < row.length; i += 1) {
       if (row[i] > row[dominant]) dominant = i;
     }
     if (previousDominant >= 0 && dominant !== previousDominant) {

@@ -138,6 +138,21 @@ export function CustomTrainBuilderModal({
                 <SelectField label="Grip type" value={draft.gripType} onChange={value => setDraft(current => ({ ...current, gripType: value as CustomTrainWorkout['gripType'] }))} options={GRIP_OPTIONS} />
                 <SelectField label="Modality" value={draft.modality} onChange={value => setDraft(current => ({ ...current, modality: value as CustomTrainWorkout['modality'] }))} options={MODALITY_OPTIONS} />
               </div>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-surface-alt px-3 py-3 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={draft.capabilityRequirements.requiresPerFingerForce}
+                  onChange={e => setDraft(current => ({
+                    ...current,
+                    capabilityRequirements: {
+                      ...current.capabilityRequirements,
+                      requiresPerFingerForce: e.target.checked,
+                    },
+                  }))}
+                  className="accent-blue-500"
+                />
+                <span>Requires per-finger force data</span>
+              </label>
             </Section>
 
             <Section title="Target Logic">

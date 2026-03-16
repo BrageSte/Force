@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildCompletedResults } from '../components/test/guided/resultAssembly.ts'
 import { getProtocolById } from '../components/test/testLibrary.ts'
 import type { AttemptSample, CompletedTestResult } from '../components/test/types.ts'
+import { defaultConnectedDevice } from '../device/deviceProfiles.ts'
 
 function sample(tMs: number, fingerKg: [number, number, number, number]): AttemptSample {
   const totalKg = fingerKg[0] + fingerKg[1] + fingerKg[2] + fingerKg[3]
@@ -43,6 +44,7 @@ describe('guided test hand mapping', () => {
       targetKg: null,
       oppositeHandBestPeakKg: null,
       profile: null,
+      device: defaultConnectedDevice('Serial'),
       visibleLivePanels: protocol.livePanels,
       attemptsByHand: {
         Left: [leftAttempt],
@@ -79,6 +81,7 @@ describe('guided test hand mapping', () => {
       targetKg: null,
       oppositeHandBestPeakKg: null,
       profile: null,
+      device: defaultConnectedDevice('Serial'),
       visibleLivePanels: protocol.livePanels,
       attemptsByHand: {
         Left: [leftAttempt],

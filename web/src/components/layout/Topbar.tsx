@@ -1,6 +1,7 @@
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useAppStore } from '../../stores/appStore.ts';
+import { defaultConnectedDevice, capabilitySummary } from '../../device/deviceProfiles.ts';
 
 interface TopbarProps {
   onOpenProfilePage: () => void;
@@ -9,12 +10,14 @@ interface TopbarProps {
 export function Topbar({ onOpenProfilePage }: TopbarProps) {
   const connected = useDeviceStore(s => s.connected);
   const sourceKind = useDeviceStore(s => s.sourceKind);
+  const activeDevice = useDeviceStore(s => s.activeDevice);
   const recording = useLiveStore(s => s.recording);
   const sampleRateHz = useLiveStore(s => s.sampleRateHz);
   const profiles = useAppStore(s => s.profiles);
   const activeProfileId = useAppStore(s => s.activeProfileId);
   const setActiveProfile = useAppStore(s => s.setActiveProfile);
   const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
+  const device = activeDevice ?? defaultConnectedDevice(sourceKind);
 
   return (
     <header className="h-12 shrink-0 bg-surface border-b border-border flex items-center px-5 gap-4">
@@ -42,9 +45,12 @@ export function Topbar({ onOpenProfilePage }: TopbarProps) {
         </div>
       )}
       <Chip
-        label={connected ? `${sourceKind} Connected` : 'Disconnected'}
+        label={connected ? `${device.deviceLabel} Connected` : 'Disconnected'}
         variant={connected ? 'success' : 'neutral'}
       />
+      {connected && (
+        <Chip label={capabilitySummary(device.capabilities)} variant="neutral" />
+      )}
       {connected && (
         <Chip label={`${Math.round(sampleRateHz)} Hz`} variant="neutral" />
       )}

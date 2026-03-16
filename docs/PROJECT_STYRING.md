@@ -20,6 +20,12 @@ Utenfor scope i denne fasen:
 - full XIAO firmwareimplementasjon
 - publisering av mobilapp
 
+Ekstern device-stotte som er tillatt i denne fasen:
+
+- Tindeq Progressor kan brukes som BLE-basert total-force-enhet i `web/`
+- dette erstatter ikke `CURRENT_UNO_HX711`
+- per-finger analytics og protokoller skal fortsatt behandles som native-only
+
 ## Naavaerende hardware
 
 Aktiv hardwareprofil: `CURRENT_UNO_HX711`
@@ -44,6 +50,7 @@ Aktive flater:
 - `web/`
   - primar produktflate videre
   - Web Serial mot dagens hardware
+  - ekstern BLE device-provider for Tindeq Progressor i total-force-modus
 - `packages/core/`
   - felles TypeScript domene- og kontraktslag
 
@@ -116,6 +123,11 @@ Planlagt softwarearkitektur:
   - Status: aktiv
   - Dato: 2026-03-11
   - Begrunnelse: hindrer at dagens UNO-oppsett og framtidig XIAO-oppsett blandes sammen.
+
+- Tindeq Progressor skal behandles som ekstern total-force-device, ikke som alternativ hardwareprofil.
+  - Status: aktiv
+  - Dato: 2026-03-16
+  - Begrunnelse: holder `CURRENT_UNO_HX711` som full-fidelity per-finger baseline mens total-force-only workflows kan brukes uten native hardware.
 
 ## Aapne spoersmaal
 

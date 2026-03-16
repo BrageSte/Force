@@ -9,8 +9,12 @@ function sample(tMs: number, kg: number | Finger4): ForceSample {
 
   return {
     tMs,
+    source: 'native-bs',
     raw: values,
     kg: values,
+    totalKg: values[0] + values[1] + values[2] + values[3],
+    totalN: (values[0] + values[1] + values[2] + values[3]) * 9.80665,
+    stability: null,
   }
 }
 
@@ -69,8 +73,25 @@ describe('metrics parity with reference expectations', () => {
     const stableMetrics = analyzeEffortSamples(stable, 1, DEFAULT_ANALYSIS_CONFIG)
     const driftyMetrics = analyzeEffortSamples(drifty, 2, DEFAULT_ANALYSIS_CONFIG)
 
-    expect(driftyMetrics.distributionDriftPerS).toBeGreaterThan(stableMetrics.distributionDriftPerS)
+    expect(driftyMetrics.distributionDriftPerS ?? 0).toBeGreaterThan(stableMetrics.distributionDriftPerS ?? 0)
     expect(driftyMetrics.steadinessTotalKg).toBeGreaterThanOrEqual(stableMetrics.steadinessTotalKg)
-    expect(driftyMetrics.loadVariationCv).toBeGreaterThan(stableMetrics.loadVariationCv)
+    expect(driftyMetrics.loadVariationCv ?? 0).toBeGreaterThan(stableMetrics.loadVariationCv ?? 0)
+  })
+
+  it('returns null per-finger metrics for total-force-only samples', () => {
+    const samples: ForceSample[] = [
+      { tMs: 0, source: 'tindeq', raw: null, kg: null, totalKg: 0, totalN: 0 },
+      { tMs: 100, source: 'tindeq', raw: null, kg: null, totalKg: 10, totalN: 98.0665 },
+      { tMs: 200, source: 'tindeq', raw: null, kg: null, totalKg: 12, totalN: 117.6798 },
+      { tMs: 300, source: 'tindeq', raw: null, kg: null, totalKg: 11, totalN: 107.8732 },
+    ]
+
+    const metrics = analyzeEffortSamples(samples, 1, DEFAULT_ANALYSIS_CONFIG)
+
+    expect(metrics.peakTotalKg).toBe(12)
+    expect(metrics.peakPerFingerKg).toBeNull()
+    expect(metrics.fingerImbalanceIndex).toBeNull()
+    expect(metrics.detailFingerKg).toBeNull()
+    expect(metrics.detailFingerPct).toBeNull()
   })
 })

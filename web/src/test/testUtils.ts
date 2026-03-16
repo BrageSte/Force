@@ -25,9 +25,12 @@ export function resetAllStores(partialSettings: Partial<AppSettings> = {}): AppS
 
   useDeviceStore.setState({
     sourceKind: settings.preferredSource,
+    connectionState: 'idle',
     connected: false,
     statusMessages: [],
-    source: null,
+    provider: null,
+    activeDevice: null,
+    scannedDevices: [],
   })
 
   useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds)
@@ -40,7 +43,11 @@ export function uniformForceSample(tMs: number, totalKg: number): ForceSample {
   const perFinger = totalKg / 4
   return {
     tMs,
+    source: 'native-bs',
     raw: [perFinger, perFinger, perFinger, perFinger],
     kg: [perFinger, perFinger, perFinger, perFinger],
+    totalKg,
+    totalN: totalKg * 9.80665,
+    stability: null,
   }
 }

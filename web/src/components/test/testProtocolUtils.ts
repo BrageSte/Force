@@ -43,7 +43,11 @@ function buildOutputs(template: CustomTestTemplate): string[] {
   const outputs = ['Peak total and repeatability', 'Attempt overlays and raw traces'];
   if (template.target.mode !== 'none') outputs.push('Target adherence and stability');
   if (template.interval?.enabled) outputs.push('Interval structure with on/off trace segmentation');
-  outputs.push('Finger-specific coaching metrics');
+  outputs.push(
+    template.capabilityRequirements.requiresPerFingerForce
+      ? 'Finger-specific coaching metrics'
+      : 'Total-force metrics only',
+  );
   return outputs;
 }
 
@@ -91,6 +95,7 @@ export function buildProtocolFromTemplate(template: CustomTestTemplate): TestPro
         : undefined,
     targetIntensityLogic: template.purpose || 'Custom benchmark logic defined by the athlete or coach.',
     stopConditions: template.stopConditions ?? [],
+    capabilityRequirements: template.capabilityRequirements,
     warmup: template.warmup ?? [],
     cooldown: template.cooldown ?? [],
     scoringModel: 'Custom benchmark uses the standard Krimblokk metrics for force, timing, and per-finger distribution.',

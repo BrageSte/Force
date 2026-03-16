@@ -1,6 +1,7 @@
 import { DEFAULT_COMPARE_METRIC, DEFAULT_LIVE_PANELS, DEFAULT_RESULT_WIDGETS } from './testConfig.ts';
 import type { Hand } from '../../types/force.ts';
 import { normalizeProfileSnapshot } from '../../types/profile.ts';
+import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import type {
   CompletedTestResult,
   CompareTagSnapshot,
@@ -50,6 +51,10 @@ function buildFallbackProtocol(protocolId: string, protocolName?: string): TestP
       targetMode: 'none',
       targetIntensityLogic: '',
       stopConditions: [],
+      capabilityRequirements: {
+        requiresTotalForce: true,
+        requiresPerFingerForce: false,
+      },
       warmup: [],
       cooldown: [],
       scoringModel: '',
@@ -92,6 +97,7 @@ function hydrateResult(raw: unknown): CompletedTestResult | null {
       : 'standard_max';
   const protocol = source.effectiveProtocol ?? buildFallbackProtocol(protocolId, source.protocolName);
   const protocolKind: ProtocolKind = source.protocolKind ?? (protocolId.startsWith('custom:') ? 'custom' : 'builtin');
+  const fallbackDevice = defaultConnectedDevice('Serial');
 
   return {
     resultId: source.resultId,
@@ -101,6 +107,11 @@ function hydrateResult(raw: unknown): CompletedTestResult | null {
     builtInId: source.builtInId ?? protocol.builtInId,
     tier: source.tier ?? protocol.tier,
     hand: source.hand ?? 'Right',
+    deviceType: source.deviceType ?? fallbackDevice.deviceType,
+    deviceName: source.deviceName ?? fallbackDevice.deviceName,
+    capabilities: source.capabilities ?? fallbackDevice.capabilities,
+    sampleSource: source.sampleSource ?? fallbackDevice.sourceKind,
+    protocolVersion: source.protocolVersion ?? 1,
     startedAtIso: source.startedAtIso ?? new Date().toISOString(),
     completedAtIso: source.completedAtIso ?? source.startedAtIso ?? new Date().toISOString(),
     profile: normalizeProfileSnapshot(source.profile),

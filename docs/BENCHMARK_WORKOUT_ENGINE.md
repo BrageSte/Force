@@ -10,6 +10,22 @@ This document defines the shared benchmark and workout engine used in `v1.5`.
 
 This is a Krimblokk product design note. It is inspired by external training systems, but it is not a 1:1 copy of any third-party app or protocol library.
 
+## Device Capability Model
+
+The benchmark/workout engine is capability-aware.
+
+- `CURRENT_UNO_HX711` is the full-data path with total force plus per-finger force.
+- Tindeq Progressor is a first-class external device, but only exposes total force.
+- Protocols and metrics must declare whether they require:
+  - total force
+  - per-finger force
+
+Rules:
+
+- total-force protocols can run on both native hardware and Tindeq
+- per-finger protocols remain unavailable on Tindeq
+- unsupported per-finger outputs must return `null` or be hidden in UI
+
 ## Shared Data Model
 
 Core workout objects are defined in `packages/core/src/workouts.ts`.
@@ -60,6 +76,11 @@ Current protocol mapping:
 - `distribution_hold` and `health_capacity_benchmark` -> Health / Capacity Benchmark
 - `force_curve_profile` -> Individual Force Curve Benchmark
 
+Current device gating:
+
+- `distribution_hold` requires per-finger force
+- `standard_max`, `repeated_max_7_53`, `explosive_pull`, `advanced_repeater`, `health_capacity_benchmark`, and `force_curve_profile` can run on total-force-only devices
+
 ## Minimum Scoring Model
 
 Benchmarks should calculate at minimum:
@@ -85,6 +106,8 @@ Advanced per-finger analytics:
 - tactical grip profile
 - session comparison deltas
 - safety flags
+
+When Tindeq is active, the engine still calculates total-force outputs such as peak, average, impulse, RFD, force-time curve, and fatigue, but per-finger analytics stay unavailable.
 
 Current benchmark score model:
 

@@ -52,6 +52,10 @@ export function createDefaultCustomTrainWorkout(): CustomTrainWorkout {
       { kind: 'stability_break', valuePct: 18, note: 'Stop if the target band becomes unstable.' },
       { kind: 'manual_stop', note: 'Stop on pain or unsafe loading.' },
     ],
+    capabilityRequirements: {
+      requiresTotalForce: true,
+      requiresPerFingerForce: false,
+    },
     metrics: ['peak_force', 'average_force', 'impulse', 'finger_distribution'],
     scoringModel: 'Completion, adherence, peak force and stability.',
     progressionRule: 'Progress conservatively after two clean sessions.',

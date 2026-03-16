@@ -4,10 +4,11 @@ import type { Finger4, Hand } from '../../../types/force.ts';
 interface LiveForcePanelProps {
   hand: Hand;
   latestTotalKg: number;
-  latestKg: Finger4;
+  latestKg: Finger4 | null;
   tareRequired: boolean;
   canTare: boolean;
   hasMeaningfulLoad: boolean;
+  perFingerForce: boolean;
   onTare: () => void;
 }
 
@@ -18,6 +19,7 @@ export function LiveForcePanel({
   tareRequired,
   canTare,
   hasMeaningfulLoad,
+  perFingerForce,
   onTare,
 }: LiveForcePanelProps) {
   const order = displayFingerOrder(hand);
@@ -46,16 +48,22 @@ export function LiveForcePanel({
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        {order.map(i => (
-          <div key={FINGER_NAMES[i]} className="bg-surface-alt rounded-lg p-2">
-            <div className="text-[11px] text-muted">{FINGER_NAMES[i]}</div>
-            <div className="text-sm font-semibold tabular-nums" style={{ color: FINGER_COLORS[i] }}>
-              {latestKg[i].toFixed(1)} kg
+      {perFingerForce ? (
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          {order.map(i => (
+            <div key={FINGER_NAMES[i]} className="bg-surface-alt rounded-lg p-2">
+              <div className="text-[11px] text-muted">{FINGER_NAMES[i]}</div>
+              <div className="text-sm font-semibold tabular-nums" style={{ color: FINGER_COLORS[i] }}>
+                {(latestKg?.[i] ?? 0).toFixed(1)} kg
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-border bg-surface-alt px-3 py-3 text-sm text-muted">
+          This device provides total force only.
+        </div>
+      )}
       {tareRequired && (
         <div className="mt-3 text-xs text-danger">
           Negative drift below -1.0 kg detected. Tare before the next attempt.

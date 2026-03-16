@@ -22,6 +22,8 @@ The product exists to measure finger force in a structured way, not just to show
 
 Primary users are people who need structured finger-force testing and follow-up over time. That includes training, performance, rehab, and technical evaluation scenarios where per-finger force and force distribution matter.
 
+The app can now also use Tindeq Progressor as an external total-force-only source when full per-finger hardware is not available.
+
 ## Current Hardware
 
 Hardware profile name: `CURRENT_UNO_HX711`
@@ -83,6 +85,7 @@ Active now:
 - Arduino UNO + HX711 wired serial path
 - `web/` UI baseline
 - Web Serial transport
+- Tindeq Progressor external BLE path for total-force-only capture
 - simulator path for development
 - `app/` as legacy reference only
 
@@ -98,12 +101,12 @@ Planned later:
 - Acquisition sample:
   - raw transport payload received from serial or BLE
 - Force sample:
-  - normalized application sample with `raw` and `kg` values
+  - normalized application sample with total force always present and per-finger values optional
 - Input mode:
   - `MODE_KG_DIRECT` means the device streams kilograms
   - `MODE_RAW` means the device streams counts and the client converts with offsets/scales
 - Source kind:
-  - `Serial`, `Simulator`, or future `BLE_UART`
+  - `Serial`, `Simulator`, `Tindeq`, or future `BLE_UART`
 - Effort:
   - one segmented pull/hold event within a recording or test
 - Session:
@@ -139,3 +142,5 @@ Status/debug lines:
 - Do not invent new transport contracts outside the shared core package.
 - Future hardware/software migration must map back to `CURRENT_UNO_HX711` and forward to `TARGET_XIAO_BLE_HX711`.
 - New product-facing work belongs in `web/` and `packages/core`.
+- `CURRENT_UNO_HX711` remains the only full-fidelity per-finger hardware profile in active use.
+- Tindeq Progressor is a first-class external device source, but it is total-force-only and must not simplify the native four-finger data model.

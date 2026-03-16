@@ -120,15 +120,11 @@ describe('sample pipeline integration', () => {
     expect(useLiveStore.getState().latestMeasuredKg).toEqual([10, 20, 30, 40])
   })
 
-  it('routes tare through the shared device command workflow', () => {
+  it('routes tare through the shared device command workflow', async () => {
     resetAllStores()
     const source = new FakeSource()
 
-    useDeviceStore.setState({
-      source,
-      connected: true,
-      statusMessages: [],
-    })
+    await pipeline.connect(source)
 
     sendTareCommand()
 

@@ -4,6 +4,26 @@ export type Finger4 = [number, number, number, number];
 export type FingerBool4 = [boolean, boolean, boolean, boolean];
 export type Hand = 'Right' | 'Left';
 export type ProfileSex = 'Male' | 'Female' | 'Other' | 'Unspecified';
+export type DeviceType = 'native-bs' | 'tindeq';
+
+export interface DeviceCapabilities {
+  totalForce: boolean;
+  perFingerForce: boolean;
+  batteryStatus: boolean;
+  tare: boolean;
+  startStopStreaming: boolean;
+}
+
+export interface ConnectedDeviceInfo {
+  deviceType: DeviceType;
+  deviceName: string;
+  deviceLabel: string;
+  transport: 'serial' | 'ble' | 'simulator';
+  sourceKind: string;
+  capabilities: DeviceCapabilities;
+  batteryMv?: number | null;
+  batteryPercent?: number | null;
+}
 
 export interface ProfileSnapshot {
   profileId: string;
@@ -24,11 +44,20 @@ export interface AcquisitionSample {
 
 export interface ForceSample {
   tMs: number;
-  raw: Finger4;
-  kg: Finger4;
+  source: DeviceType;
+  raw: Finger4 | null;
+  kg: Finger4 | null;
+  totalKg: number;
+  totalN: number;
+  batteryMv?: number | null;
+  stability?: number | null;
 }
 
 export function totalKg(sample: ForceSample): number {
+  if (Number.isFinite(sample.totalKg)) {
+    return sample.totalKg;
+  }
+  if (!sample.kg) return 0;
   return sample.kg[0] + sample.kg[1] + sample.kg[2] + sample.kg[3];
 }
 
@@ -39,7 +68,7 @@ export interface EffortMetrics {
   durationS: number;
 
   peakTotalKg: number;
-  peakPerFingerKg: Finger4;
+  peakPerFingerKg: Finger4 | null;
   timeToPeakS: number;
 
   rfd100KgS: number;
@@ -50,24 +79,24 @@ export interface EffortMetrics {
   avgTotalKg: number;
   tutS: number;
 
-  distributionDriftPerS: number;
+  distributionDriftPerS: number | null;
   steadinessTotalKg: number;
-  steadinessPerFingerKg: Finger4;
+  steadinessPerFingerKg: Finger4 | null;
 
-  fingerImbalanceIndex: number;
-  loadVariationCv: number;
-  dominantSwitchCount: number;
-  loadShiftRate: number;
+  fingerImbalanceIndex: number | null;
+  loadVariationCv: number | null;
+  dominantSwitchCount: number | null;
+  loadShiftRate: number | null;
   stabilizationTimeS: number | null;
-  ringPinkyShare: number;
+  ringPinkyShare: number | null;
 
   holdStartTMs: number;
   holdEndTMs: number;
 
   detailTMs: number[];
   detailTotalKg: number[];
-  detailFingerKg: Finger4[];
-  detailFingerPct: Finger4[];
+  detailFingerKg: Finger4[] | null;
+  detailFingerPct: Finger4[] | null;
 }
 
 export interface SessionSummary {
@@ -87,23 +116,25 @@ export interface SessionPayload {
   startedAtIso: string;
   endedAtIso: string;
   hand: Hand;
+  deviceType: DeviceType;
+  deviceName: string;
+  capabilities: DeviceCapabilities;
+  sampleSource: string;
+  protocolVersion: number;
   profile?: ProfileSnapshot | null;
   tag: string;
   notes: string;
   summary: SessionSummary;
   efforts: EffortMetrics[];
-  samples: Array<{
-    tMs: number;
-    raw: Finger4;
-    kg: Finger4;
-    totalKg: number;
-  }>;
+  samples: ForceSample[];
 }
 
 export interface SessionMeta {
   sessionId: string;
   startedAtIso: string;
   hand: Hand;
+  deviceType?: DeviceType;
+  deviceName?: string;
   profileId?: string;
   profileName?: string;
   effortsCount: number;

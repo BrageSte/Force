@@ -33,6 +33,10 @@ function avgFingerMetric(result: CompletedTestResult, picker: (resultIdx: number
   return mean(values);
 }
 
+function hasPerFingerCapability(result: CompletedTestResult): boolean {
+  return result.capabilities?.perFingerForce !== false;
+}
+
 function avgExperimentalMetric(values: Array<number | null | undefined>): number | null {
   const filtered = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   return filtered.length > 0 ? mean(filtered) : null;
@@ -118,7 +122,7 @@ export const COMPARE_METRICS: CompareMetricDescriptor[] = [
     description: 'Best attempt peak for the selected finger.',
     requiresFinger: true,
     normalization: 'kg',
-    available: result => result.attempts.length > 0,
+    available: result => result.attempts.length > 0 && hasPerFingerCapability(result),
     getValue: (result, fingerIdx = 0) => bestAttempt(result)?.core.peakPerFingerKg[fingerIdx] ?? null,
   },
   {
@@ -128,7 +132,7 @@ export const COMPARE_METRICS: CompareMetricDescriptor[] = [
     description: 'Average share at peak for the selected finger.',
     requiresFinger: true,
     normalization: 'none',
-    available: result => result.attempts.length > 0,
+    available: result => result.attempts.length > 0 && hasPerFingerCapability(result),
     getValue: (result, fingerIdx = 0) =>
       avgFingerMetric(result, attemptIdx => result.attempts[attemptIdx].core.fingerShareAtPeakPct[fingerIdx]),
   },
@@ -139,7 +143,7 @@ export const COMPARE_METRICS: CompareMetricDescriptor[] = [
     description: 'Average contribution drift for the selected finger.',
     requiresFinger: true,
     normalization: 'none',
-    available: result => result.attempts.length > 0,
+    available: result => result.attempts.length > 0 && hasPerFingerCapability(result),
     getValue: (result, fingerIdx = 0) =>
       avgFingerMetric(result, attemptIdx => result.attempts[attemptIdx].coaching.contributionDriftPct[fingerIdx]),
   },
@@ -150,7 +154,7 @@ export const COMPARE_METRICS: CompareMetricDescriptor[] = [
     description: 'Average per-finger fatigue slope across attempts.',
     requiresFinger: true,
     normalization: 'kg',
-    available: result => result.attempts.length > 0,
+    available: result => result.attempts.length > 0 && hasPerFingerCapability(result),
     getValue: (result, fingerIdx = 0) =>
       avgFingerMetric(result, attemptIdx => result.attempts[attemptIdx].coaching.fatigueSlopePerFingerKgS[fingerIdx]),
   },

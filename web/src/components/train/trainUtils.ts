@@ -1,5 +1,6 @@
 import type { SafetyFlag, SessionComparisonDelta, TacticalGripProfile } from '@krimblokk/core';
 import type { Hand, ProfileSnapshot } from '../../types/force.ts';
+import type { ConnectedDeviceInfo } from '../../types/force.ts';
 import {
   benchmarkReferenceSourceDescription,
   resolveBenchmarkReference,
@@ -327,6 +328,7 @@ export function buildTrainSessionResult(args: {
   protocol: TrainProtocol | CustomTrainWorkout;
   profile: ProfileSnapshot | null;
   hand: Hand;
+  device: ConnectedDeviceInfo;
   startedAtIso: string;
   targetMode: TrainTargetMode;
   targetKg: number;
@@ -353,6 +355,11 @@ export function buildTrainSessionResult(args: {
     athleteLevel: args.protocol.athleteLevel,
     sourceBasis: args.protocol.sourceBasis,
     hand: args.hand,
+    deviceType: args.device.deviceType,
+    deviceName: args.device.deviceName,
+    capabilities: args.device.capabilities,
+    sampleSource: args.device.sourceKind,
+    protocolVersion: 1,
     gripType: args.protocol.gripType,
     modality: args.protocol.modality,
     gripSpec: formatGripSpec(args.protocol.gripType, args.protocol.modality),

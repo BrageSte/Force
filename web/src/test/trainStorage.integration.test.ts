@@ -3,6 +3,7 @@ import { toProfileSnapshot, createProfile } from '../types/profile.ts'
 import { getTrainProtocolById } from '../components/train/trainLibrary.ts'
 import { loadTrainingSession, listTrainingSessionResults, listTrainingSessions, saveTrainingSession } from '../components/train/trainStorage.ts'
 import { buildTrainSessionResult } from '../components/train/trainUtils.ts'
+import { defaultConnectedDevice } from '../device/deviceProfiles.ts'
 
 describe('training session storage', () => {
   it('saves indexeddb training sessions with profile metadata', async () => {
@@ -13,6 +14,7 @@ describe('training session storage', () => {
       protocol,
       profile: toProfileSnapshot(profile),
       hand: 'Right',
+      device: defaultConnectedDevice('Serial'),
       startedAtIso: '2026-03-11T10:00:00.000Z',
       targetMode: 'auto_from_latest_test',
       targetKg: 52,

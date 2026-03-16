@@ -6,6 +6,10 @@ import { MetricRow } from '../shared/MetricRow.tsx';
 import type { EffortMetrics } from '../../types/force.ts';
 import { useState } from 'react';
 
+function formatMaybe(value: number | null, digits = 1): string {
+  return value === null ? '--' : value.toFixed(digits);
+}
+
 export function SessionPage() {
   const session = useAppStore(s => s.currentSession);
   const [selectedEffortId, setSelectedEffortId] = useState<number | null>(null);
@@ -24,6 +28,7 @@ export function SessionPage() {
   }
 
   const { summary, efforts } = session;
+  const hasPerFingerData = session.capabilities?.perFingerForce ?? efforts.some(effort => effort.peakPerFingerKg !== null);
 
   return (
     <div className="h-full flex flex-col gap-4 overflow-auto">
@@ -32,6 +37,9 @@ export function SessionPage() {
         <div>
           <span className="text-xs text-muted">Session</span>
           <p className="text-sm font-semibold">{summary.sessionId}</p>
+          <p className="text-xs text-muted mt-1">
+            {session.deviceName} | {session.capabilities.perFingerForce ? 'Total + per-finger' : 'Total force only'}
+          </p>
           {session.profile && (
             <p className="text-xs text-muted mt-1">
               {session.profile.name} | Dominant {session.profile.dominantHand}
@@ -76,20 +84,25 @@ export function SessionPage() {
                 >
                   <td className="px-3 py-2 text-muted">{e.effortId}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{e.peakTotalKg.toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[0] }}>{e.peakPerFingerKg[0].toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[1] }}>{e.peakPerFingerKg[1].toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[2] }}>{e.peakPerFingerKg[2].toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[3] }}>{e.peakPerFingerKg[3].toFixed(1)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[0] }}>{formatMaybe(e.peakPerFingerKg?.[0] ?? null)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[1] }}>{formatMaybe(e.peakPerFingerKg?.[1] ?? null)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[2] }}>{formatMaybe(e.peakPerFingerKg?.[2] ?? null)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: FINGER_COLORS[3] }}>{formatMaybe(e.peakPerFingerKg?.[3] ?? null)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.rfd100KgS.toFixed(1)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.avgTotalKg.toFixed(1)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.tutS.toFixed(1)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{e.durationS.toFixed(1)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{e.fingerImbalanceIndex.toFixed(1)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(e.fingerImbalanceIndex, 1)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {!hasPerFingerData && (
+          <div className="border-t border-border px-4 py-3 text-sm text-muted">
+            This session was recorded on a total-force-only device, so per-finger metrics are unavailable.
+          </div>
+        )}
       </div>
 
       {/* Detail chart for selected effort */}
@@ -108,8 +121,8 @@ export function SessionPage() {
               <MetricRow label="Avg hold" value={selectedEffort.avgTotalKg.toFixed(1)} unit="kg" />
               <MetricRow label="TUT" value={selectedEffort.tutS.toFixed(1)} unit="s" />
               <MetricRow label="Duration" value={selectedEffort.durationS.toFixed(1)} unit="s" />
-              <MetricRow label="Imbalance" value={selectedEffort.fingerImbalanceIndex.toFixed(1)} />
-              {selectedEffort.peakPerFingerKg.map((v, i) => (
+              <MetricRow label="Imbalance" value={formatMaybe(selectedEffort.fingerImbalanceIndex, 1)} />
+              {(selectedEffort.peakPerFingerKg ?? []).map((v, i) => (
                 <MetricRow
                   key={i}
                   label={`Peak ${FINGER_NAMES[i]}`}
@@ -143,10 +156,10 @@ function EffortDetailChart({ effort }: { effort: EffortMetrics }) {
 
     const times = new Float64Array(effort.detailTMs);
     const total = new Float64Array(effort.detailTotalKg);
-    const f0 = new Float64Array(effort.detailFingerKg.map(f => f[0]));
-    const f1 = new Float64Array(effort.detailFingerKg.map(f => f[1]));
-    const f2 = new Float64Array(effort.detailFingerKg.map(f => f[2]));
-    const f3 = new Float64Array(effort.detailFingerKg.map(f => f[3]));
+    const f0 = new Float64Array((effort.detailFingerKg ?? []).map(f => f[0]));
+    const f1 = new Float64Array((effort.detailFingerKg ?? []).map(f => f[1]));
+    const f2 = new Float64Array((effort.detailFingerKg ?? []).map(f => f[2]));
+    const f3 = new Float64Array((effort.detailFingerKg ?? []).map(f => f[3]));
 
     const opts: uPlot.Options = {
       width: el.clientWidth,
@@ -164,14 +177,19 @@ function EffortDetailChart({ effort }: { effort: EffortMetrics }) {
       series: [
         {},
         { label: 'Total', stroke: TOTAL_COLOR, width: 2 },
-        { label: FINGER_NAMES[0], stroke: FINGER_COLORS[0], width: 1.5 },
-        { label: FINGER_NAMES[1], stroke: FINGER_COLORS[1], width: 1.5 },
-        { label: FINGER_NAMES[2], stroke: FINGER_COLORS[2], width: 1.5 },
-        { label: FINGER_NAMES[3], stroke: FINGER_COLORS[3], width: 1.5 },
+        ...(effort.detailFingerKg ? [
+          { label: FINGER_NAMES[0], stroke: FINGER_COLORS[0], width: 1.5 },
+          { label: FINGER_NAMES[1], stroke: FINGER_COLORS[1], width: 1.5 },
+          { label: FINGER_NAMES[2], stroke: FINGER_COLORS[2], width: 1.5 },
+          { label: FINGER_NAMES[3], stroke: FINGER_COLORS[3], width: 1.5 },
+        ] : []),
       ],
     };
 
-    const plot = new uPlot(opts, [times, total, f0, f1, f2, f3], el);
+    const data = effort.detailFingerKg
+      ? [times, total, f0, f1, f2, f3]
+      : [times, total];
+    const plot = new uPlot(opts, data, el);
 
     const obs = new ResizeObserver(entries => {
       const { width } = entries[0].contentRect;

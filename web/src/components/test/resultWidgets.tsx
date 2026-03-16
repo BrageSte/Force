@@ -133,7 +133,7 @@ const RESULT_WIDGETS: ResultWidgetDescriptor[] = [
   },
   {
     ...widgetMeta('finger_detail'),
-    available: result => result.attempts.length > 0,
+    available: result => result.attempts.length > 0 && result.capabilities?.perFingerForce !== false,
     render: ({ result, oppositeHandResult }) => (
       <FingerDetailView result={result} oppositeHandResult={oppositeHandResult} />
     ),

@@ -3,9 +3,10 @@ import { useAppStore } from '../stores/appStore.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
 import { toProfileSnapshot } from '../types/profile.ts';
+import { defaultConnectedDevice } from '../device/deviceProfiles.ts';
 
 export function sendTareCommand(statusMessage = 'Tare command sent'): void {
-  useDeviceStore.getState().sendDeviceCommand({ kind: 'tare' });
+  void useDeviceStore.getState().tare();
   useDeviceStore.getState().addStatus(statusMessage);
 }
 
@@ -23,6 +24,8 @@ export async function saveCurrentRecordingAsSession(): Promise<SessionPayload | 
   const activeProfile = useAppStore.getState().profiles.find(
     profile => profile.profileId === useAppStore.getState().activeProfileId,
   ) ?? null;
+  const deviceState = useDeviceStore.getState();
+  const connectedDevice = deviceState.activeDevice ?? defaultConnectedDevice(deviceState.sourceKind);
   const sessionId = `session_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
 
   const { efforts, summary } = analyzeSession(
@@ -49,17 +52,17 @@ export async function saveCurrentRecordingAsSession(): Promise<SessionPayload | 
     startedAtIso: live.recordingStartedIso ?? new Date().toISOString(),
     endedAtIso: new Date().toISOString(),
     hand: appHand,
+    deviceType: connectedDevice.deviceType,
+    deviceName: connectedDevice.deviceName,
+    capabilities: connectedDevice.capabilities,
+    sampleSource: connectedDevice.sourceKind,
+    protocolVersion: 1,
     profile: activeProfile ? toProfileSnapshot(activeProfile) : null,
     tag: '',
     notes: '',
     summary,
     efforts,
-    samples: live.recordedSamples.map(sample => ({
-      tMs: sample.tMs,
-      raw: sample.raw,
-      kg: sample.kg,
-      totalKg: sample.kg[0] + sample.kg[1] + sample.kg[2] + sample.kg[3],
-    })),
+    samples: live.recordedSamples.map(sample => ({ ...sample })),
   };
 
   await useAppStore.getState().saveSession(payload);

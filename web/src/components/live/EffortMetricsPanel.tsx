@@ -20,7 +20,7 @@ export function EffortMetricsPanel() {
           <MetricRow label="Avg hold" value={effort.avgTotalKg.toFixed(1)} unit="kg" />
           <MetricRow label="TUT" value={effort.tutS.toFixed(1)} unit="s" />
           <MetricRow label="Duration" value={effort.durationS.toFixed(1)} unit="s" />
-          <MetricRow label="Imbalance" value={effort.fingerImbalanceIndex.toFixed(1)} />
+          <MetricRow label="Imbalance" value={effort.fingerImbalanceIndex === null ? '--' : effort.fingerImbalanceIndex.toFixed(1)} />
         </div>
       ) : (
         <p className="text-sm text-muted/60 mt-4">Apply force to detect an effort</p>

@@ -15,6 +15,11 @@ The goal is to move from static hangboard presets toward a force-aware climbing 
 - redistribution and compensation patterns
 - bodyweight-relative context when available
 
+The runner must also degrade cleanly by device capability:
+
+- native BS hardware: full total-force + per-finger analytics
+- Tindeq Progressor: total-force-only execution, graphs, targets, and storage
+
 ## Hardware and Runtime Constraint
 
 Current active runtime still targets `CURRENT_UNO_HX711`:
@@ -46,6 +51,12 @@ Design goals:
 - live per-finger bars
 - session-wide progress bar
 - warm-up and main block distinction
+
+When Tindeq is active:
+
+- the large total-force number and force-time graph remain active
+- per-finger bars, heatmaps, and redistribution-only views are hidden or disabled
+- workouts that require `requiresPerFingerForce: true` are unavailable until native BS hardware is selected
 
 UI direction is inspired by timer-heavy climbing training apps such as Crimpd, but adapted to Krimblokk's force-measurement surface.
 
@@ -159,6 +170,11 @@ Current deterministic rules:
 - weak finger across recent benchmarks -> finger bias accessory
 - recent force-curve benchmark -> offer force curve builder
 - no clear limiter -> strength 10s as default anchor workout
+
+Recommendation guardrails:
+
+- Tindeq-only history can still drive total-force prescriptions
+- weak-finger and redistribution-driven recommendations should only be emitted when recent per-finger benchmark history exists
 
 ## Result Focus in TRAIN
 

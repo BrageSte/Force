@@ -424,6 +424,10 @@ export function generateAiTemplateSuggestion(input: string): AiTemplateSuggestio
     countdownSec,
     restSec,
     target,
+    capabilityRequirements: {
+      requiresTotalForce: true,
+      requiresPerFingerForce: hasAny(text, ['finger', 'fordeling', 'distribution', 'balance', 'balanse']),
+    },
     interval,
     livePanels,
     resultWidgets,

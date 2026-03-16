@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { toProfileSnapshot } from '../../types/profile.ts';
+import { capabilityBlockReason, deviceCapabilitiesForSourceKind } from '../../device/capabilityChecks.ts';
 import { loadTestResults } from '../test/testStorage.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import { AiTrainBuilderModal } from './AiTrainBuilderModal.tsx';
@@ -68,6 +69,7 @@ export function TrainPage() {
   const setHand = useAppStore(s => s.setHand);
   const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
   const deviceConnected = useDeviceStore(s => s.connected);
+  const sourceKind = useDeviceStore(s => s.sourceKind);
   const [view, setView] = useState<TrainPageView>('library');
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<TrainWorkoutId>('strength_10s');
   const [selectedWorkoutKind, setSelectedWorkoutKind] = useState<TrainWorkoutKind>('builtin');
@@ -140,7 +142,21 @@ export function TrainPage() {
       .sort((a, b) => b.completedAtIso.localeCompare(a.completedAtIso))[0] ?? null;
   }, [autoTarget.benchmarkSourceId, hand, profileTests, selectedWorkout.benchmarkSourceId]);
 
+  const selectedDeviceCapabilities = useMemo(
+    () => deviceCapabilitiesForSourceKind(sourceKind),
+    [sourceKind],
+  );
+
+  const workoutStartBlockReason = useMemo(
+    () => capabilityBlockReason(selectedWorkout.capabilityRequirements, selectedDeviceCapabilities),
+    [selectedDeviceCapabilities, selectedWorkout.capabilityRequirements],
+  );
+
   const handleStart = (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel' | 'benchmarkReference'>) => {
+    if (workoutStartBlockReason) {
+      useDeviceStore.getState().addStatus(workoutStartBlockReason);
+      return;
+    }
     setActiveRun({
       hand,
       workoutId: selectedWorkout.id,
@@ -384,6 +400,7 @@ export function TrainPage() {
             recommendation={selectedRecommendation}
             athleteProfile={athleteProfile}
             deviceConnected={deviceConnected}
+            capabilityBlockReason={workoutStartBlockReason}
             onStart={handleStart}
           />
         </div>
@@ -600,6 +617,7 @@ function TrainSetupPanel({
   recommendation,
   athleteProfile,
   deviceConnected,
+  capabilityBlockReason,
   onStart,
 }: {
   selectedWorkout: ReturnType<typeof getTrainProtocolById> | CustomTrainWorkout;
@@ -609,6 +627,7 @@ function TrainSetupPanel({
   recommendation: TrainRecommendation | null;
   athleteProfile: ReturnType<typeof buildAthleteForceProfile>;
   deviceConnected: boolean;
+  capabilityBlockReason: string | null;
   onStart: (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel' | 'benchmarkReference'>) => void;
 }) {
   const defaultMode: TrainTargetMode = autoTarget.mode === 'manual' ? 'manual' : autoTarget.mode;
@@ -742,11 +761,16 @@ function TrainSetupPanel({
             benchmarkReference: targetMode === 'auto_from_latest_test' ? autoTarget.benchmarkReference : null,
           });
         }}
-        disabled={!deviceConnected || (targetMode !== 'manual' && (!resolvedTargetKg || resolvedTargetKg <= 0))}
+        disabled={!deviceConnected || Boolean(capabilityBlockReason) || (targetMode !== 'manual' && (!resolvedTargetKg || resolvedTargetKg <= 0))}
         className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-40"
       >
         Start Guided Workout
       </button>
+      {capabilityBlockReason && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning">
+          {capabilityBlockReason}
+        </div>
+      )}
     </div>
   );
 }

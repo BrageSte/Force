@@ -1,13 +1,27 @@
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useAppStore } from '../../stores/appStore.ts';
+import { useDeviceStore } from '../../stores/deviceStore.ts';
+import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import { FINGER_NAMES, FINGER_COLORS, displayOrder } from '../../constants/fingers.ts';
 
 export function DistributionChart() {
   const latestPct = useLiveStore(s => s.latestPct);
   const hasMeaningfulLoad = useLiveStore(s => s.hasMeaningfulLoad);
   const hand = useAppStore(s => s.hand);
+  const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
   const order = displayOrder(hand);
-  const maxPct = Math.max(50, ...latestPct);
+  const maxPct = Math.max(50, ...(latestPct ?? [0, 0, 0, 0]));
+
+  if (!perFingerForce) {
+    return (
+      <div className="bg-surface rounded-xl border border-border p-4 h-full">
+        <div className="text-xs text-muted font-medium uppercase tracking-wide mb-3">Distribution</div>
+        <div className="rounded-lg border border-border bg-surface-alt px-3 py-4 text-sm text-muted">
+          This device provides total force only, so finger distribution is unavailable.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface rounded-xl border border-border p-4 h-full">
@@ -16,10 +30,10 @@ export function DistributionChart() {
         {order.map(i => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
             <span className="text-xs font-semibold tabular-nums" style={{ color: FINGER_COLORS[i] }}>
-              {hasMeaningfulLoad ? `${latestPct[i].toFixed(0)}%` : '--'}
+              {hasMeaningfulLoad && latestPct ? `${latestPct[i].toFixed(0)}%` : '--'}
             </span>
             <div className="w-full bg-surface-alt rounded-t-md relative" style={{ height: '120px' }}>
-              {hasMeaningfulLoad && (
+              {hasMeaningfulLoad && latestPct && (
                 <div
                   className="absolute bottom-0 w-full rounded-t-md transition-all duration-75"
                   style={{

@@ -47,6 +47,7 @@ import type {
   TestProtocol,
 } from './types.ts';
 import { toProfileSnapshot } from '../../types/profile.ts';
+import { capabilityBlockReason, deviceCapabilitiesForSourceKind } from '../../device/capabilityChecks.ts';
 
 type TestPageView = 'library' | 'guided' | 'results' | 'compare' | 'finger' | 'session';
 
@@ -66,6 +67,7 @@ export function TestPage() {
   const setHand = useAppStore(s => s.setHand);
   const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
   const connected = useDeviceStore(s => s.connected);
+  const sourceKind = useDeviceStore(s => s.sourceKind);
 
   const [view, setView] = useState<TestPageView>('library');
   const [selectedRef, setSelectedRef] = useState<ProtocolRef>({ kind: 'builtin', id: 'standard_max' });
@@ -177,6 +179,22 @@ export function TestPage() {
     return buildAiCoachingReport(selectedAnalysisResult, profileHistory);
   }, [profileHistory, selectedAnalysisResult, settings.aiCoachingEnabled]);
 
+  const selectedDeviceCapabilities = useMemo(
+    () => deviceCapabilitiesForSourceKind(sourceKind),
+    [sourceKind],
+  );
+
+  const selectedStartBlockReason = useMemo(() => {
+    if (selectedRef.kind === 'builtin') {
+      const protocol = getProtocolById(selectedRef.id as TestId);
+      return capabilityBlockReason(protocol.capabilityRequirements, selectedDeviceCapabilities);
+    }
+    const template = customTemplates.find(item => item.id === selectedRef.id);
+    return template
+      ? capabilityBlockReason(template.capabilityRequirements, selectedDeviceCapabilities)
+      : null;
+  }, [customTemplates, selectedDeviceCapabilities, selectedRef]);
+
   const persistTemplate = (template: CustomTestTemplate): CustomTestTemplate => {
     const all = upsertCustomTemplate(template);
     setCustomTemplates(all);
@@ -198,6 +216,12 @@ export function TestPage() {
       if (!template) return;
       protocol = buildProtocolFromTemplate(template);
       opposite = findLatestTemplateResult(profileHistory, template.id, otherHand(hand));
+    }
+
+    const blockReason = capabilityBlockReason(protocol.capabilityRequirements, selectedDeviceCapabilities);
+    if (blockReason) {
+      useDeviceStore.getState().addStatus(blockReason);
+      return;
     }
 
     const oppositeBestPeak = opposite
@@ -316,7 +340,8 @@ export function TestPage() {
             onCreateCustom={openCreateBuilder}
             onEditCustom={(template) => setBuilderState({ mode: 'edit', template })}
             onDuplicateCustom={handleDuplicateTemplate}
-            onDeleteCustom={handleDeleteTemplate}
+          onDeleteCustom={handleDeleteTemplate}
+          startDisabledReason={selectedStartBlockReason}
           />
 
           {aiBuilderOpen && (

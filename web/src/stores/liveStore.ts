@@ -25,17 +25,17 @@ interface LiveState {
   bufferLength: number;
 
   // Latest display sample for KPI cards and UI noise gating
-  latestKg: Finger4;
+  latestKg: Finger4 | null;
   latestTotalKg: number;
-  latestPct: Finger4;
+  latestPct: Finger4 | null;
   hasMeaningfulLoad: boolean;
 
   // Latest measured sample before display gating
-  latestRaw: Finger4;
-  latestChannelRaw: Finger4;
-  latestMeasuredKg: Finger4;
+  latestRaw: Finger4 | null;
+  latestChannelRaw: Finger4 | null;
+  latestMeasuredKg: Finger4 | null;
   latestMeasuredTotalKg: number;
-  latestMeasuredPct: Finger4;
+  latestMeasuredPct: Finger4 | null;
 
   tareRequired: boolean;
   sampleRateHz: number;
@@ -84,15 +84,15 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   writePos: 0,
   bufferLength: 0,
 
-  latestKg: [0, 0, 0, 0],
+  latestKg: null,
   latestTotalKg: 0,
-  latestPct: [0, 0, 0, 0],
+  latestPct: null,
   hasMeaningfulLoad: false,
-  latestRaw: [0, 0, 0, 0],
-  latestChannelRaw: [0, 0, 0, 0],
-  latestMeasuredKg: [0, 0, 0, 0],
+  latestRaw: null,
+  latestChannelRaw: null,
+  latestMeasuredKg: null,
   latestMeasuredTotalKg: 0,
-  latestMeasuredPct: [0, 0, 0, 0],
+  latestMeasuredPct: null,
   tareRequired: false,
   sampleRateHz: 0,
   _recentTimes: [],
@@ -113,36 +113,44 @@ export const useLiveStore = create<LiveState>((set, get) => ({
     const pos = state.writePos % state.capacity;
 
     state.timeSeries[pos] = s.tMs;
-    const clampedKg: Finger4 = [
-      Math.max(0, s.kg[0]),
-      Math.max(0, s.kg[1]),
-      Math.max(0, s.kg[2]),
-      Math.max(0, s.kg[3]),
-    ];
-    const clampedTotal = clampedKg[0] + clampedKg[1] + clampedKg[2] + clampedKg[3];
-    const measuredPct: Finger4 = clampedTotal > 1e-9
+    const clampedKg: Finger4 | null = s.kg
+      ? [
+          Math.max(0, s.kg[0]),
+          Math.max(0, s.kg[1]),
+          Math.max(0, s.kg[2]),
+          Math.max(0, s.kg[3]),
+        ]
+      : null;
+    const clampedTotal = Math.max(0, s.totalKg);
+    const measuredPct: Finger4 | null = clampedKg && clampedTotal > 1e-9
       ? [
           (clampedKg[0] / clampedTotal) * 100,
           (clampedKg[1] / clampedTotal) * 100,
           (clampedKg[2] / clampedTotal) * 100,
           (clampedKg[3] / clampedTotal) * 100,
         ]
-      : [0, 0, 0, 0];
+      : clampedKg
+        ? [0, 0, 0, 0]
+        : null;
     const hasMeaningfulLoad = clampedTotal >= 1;
-    const displayKg: Finger4 = hasMeaningfulLoad ? clampedKg : [0, 0, 0, 0];
+    const displayKg: Finger4 | null = clampedKg
+      ? (hasMeaningfulLoad ? clampedKg : [0, 0, 0, 0])
+      : null;
     const total = hasMeaningfulLoad ? clampedTotal : 0;
 
-    for (let i = 0; i < 4; i++) state.fingerSeries[i][pos] = displayKg[i];
+    for (let i = 0; i < 4; i++) state.fingerSeries[i][pos] = displayKg?.[i] ?? 0;
     state.totalSeries[pos] = total;
 
-    const pct: Finger4 = hasMeaningfulLoad
+    const pct: Finger4 | null = hasMeaningfulLoad && displayKg
       ? [
           (displayKg[0] / total) * 100,
           (displayKg[1] / total) * 100,
           (displayKg[2] / total) * 100,
           (displayKg[3] / total) * 100,
         ]
-      : [0, 0, 0, 0];
+      : displayKg
+        ? [0, 0, 0, 0]
+        : null;
 
     // Sample rate estimation
     const now = performance.now();
@@ -219,14 +227,14 @@ export const useLiveStore = create<LiveState>((set, get) => ({
     bufferLength: 0,
     currentEffort: null,
     lastEffort: null,
-    latestRaw: [0, 0, 0, 0],
-    latestChannelRaw: [0, 0, 0, 0],
-    latestMeasuredKg: [0, 0, 0, 0],
+    latestRaw: null,
+    latestChannelRaw: null,
+    latestMeasuredKg: null,
     latestMeasuredTotalKg: 0,
-    latestMeasuredPct: [0, 0, 0, 0],
-    latestKg: [0, 0, 0, 0],
+    latestMeasuredPct: null,
+    latestKg: null,
     latestTotalKg: 0,
-    latestPct: [0, 0, 0, 0],
+    latestPct: null,
     recording: false,
     recordedSamples: [],
     recordedEfforts: [],

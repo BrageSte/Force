@@ -2,6 +2,7 @@ import { type Hand, type ProfileSnapshot } from '@krimblokk/core';
 import { analyzeCompletedTest } from '../testAnalysis.ts';
 import { buildCompareTags } from '../testProtocolUtils.ts';
 import type { AttemptSample, CompletedTestResult, LivePanelId, TestProtocol } from '../types.ts';
+import type { ConnectedDeviceInfo } from '../../../types/force.ts';
 import { bestPeakOfAttempts } from './liveCapture.ts';
 
 interface BuildCompletedResultsArgs {
@@ -12,6 +13,7 @@ interface BuildCompletedResultsArgs {
   targetKg: number | null;
   oppositeHandBestPeakKg: number | null;
   profile: ProfileSnapshot | null;
+  device: ConnectedDeviceInfo;
   visibleLivePanels: LivePanelId[];
   attemptsByHand: Record<Hand, AttemptSample[][]>;
   startedAtIsoByHand: Record<Hand, string>;
@@ -25,6 +27,7 @@ export function buildCompletedResults({
   targetKg,
   oppositeHandBestPeakKg,
   profile,
+  device,
   visibleLivePanels,
   attemptsByHand,
   startedAtIsoByHand,
@@ -46,6 +49,11 @@ export function buildCompletedResults({
     {
       oppositeHandBestPeakKg: primaryOppositeBest,
       profile,
+      deviceType: device.deviceType,
+      deviceName: device.deviceName,
+      capabilities: device.capabilities,
+      sampleSource: device.sourceKind,
+      protocolVersion: 1,
       dashboardSnapshot: {
         livePanels: visibleLivePanels,
         resultWidgets: protocol.resultWidgets,
@@ -73,6 +81,11 @@ export function buildCompletedResults({
     {
       oppositeHandBestPeakKg: bestPeakOfAttempts(primaryAttempts),
       profile,
+      deviceType: device.deviceType,
+      deviceName: device.deviceName,
+      capabilities: device.capabilities,
+      sampleSource: device.sourceKind,
+      protocolVersion: 1,
       dashboardSnapshot: {
         livePanels: visibleLivePanels,
         resultWidgets: protocol.resultWidgets,

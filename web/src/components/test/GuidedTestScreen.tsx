@@ -5,7 +5,7 @@ import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR, displayFingerOrder } from '..
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
 import { LIVE_PANEL_CATALOG, livePanelLabel } from './testConfig.ts';
 import type { AttemptSample, CompletedTestResult, TestProtocol, TestRunnerPhase } from './types.ts';
-import type { Hand, ProfileSnapshot } from '../../types/force.ts';
+import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 import { sendTareCommand } from '../../live/sessionWorkflow.ts';
 import { useAudioCuePlayer } from './guided/audioCues.ts';
 import { buildAttemptSampleFromMeasuredFrame, polylinePath } from './guided/liveCapture.ts';
@@ -20,6 +20,7 @@ import {
   phaseTitle,
 } from './guided/runnerState.ts';
 import { LiveForcePanel } from './guided/LiveForcePanel.tsx';
+import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 
 interface GuidedTestScreenProps {
   protocol: TestProtocol;
@@ -49,6 +50,12 @@ export function GuidedTestScreen({
   const hasMeaningfulLoad = useLiveStore(s => s.hasMeaningfulLoad);
   const tareRequired = useLiveStore(s => s.tareRequired);
   const connected = useDeviceStore(s => s.connected);
+  const sourceKind = useDeviceStore(s => s.sourceKind);
+  const activeDevice = useDeviceStore(s => s.activeDevice);
+  const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
+  const zeroFinger: Finger4 = [0, 0, 0, 0];
+  const displayPct = latestPct ?? zeroFinger;
+  const device = activeDevice ?? defaultConnectedDevice(sourceKind);
 
   const secondaryHand = otherHand(hand);
   const trackedHands = useMemo<Hand[]>(
@@ -154,6 +161,7 @@ export function GuidedTestScreen({
         targetKg,
         oppositeHandBestPeakKg,
         profile,
+        device,
         visibleLivePanels,
         attemptsByHand: finalAttemptsByHand,
         startedAtIsoByHand: startedAtIsoRef.current,
@@ -370,18 +378,8 @@ export function GuidedTestScreen({
     const live = useLiveStore.getState();
     currentSamplesRef.current.push(buildAttemptSampleFromMeasuredFrame(elapsed, {
       latestMeasuredTotalKg: live.latestMeasuredTotalKg,
-      latestMeasuredKg: [
-        live.latestMeasuredKg[0],
-        live.latestMeasuredKg[1],
-        live.latestMeasuredKg[2],
-        live.latestMeasuredKg[3],
-      ],
-      latestMeasuredPct: [
-        live.latestMeasuredPct[0],
-        live.latestMeasuredPct[1],
-        live.latestMeasuredPct[2],
-        live.latestMeasuredPct[3],
-      ],
+      latestMeasuredKg: live.latestMeasuredKg ?? zeroFinger,
+      latestMeasuredPct: live.latestMeasuredPct ?? zeroFinger,
     }, protocol));
 
     if (currentSamplesRef.current.length % 4 === 0) {
@@ -478,6 +476,9 @@ export function GuidedTestScreen({
             <h2 className="text-xl font-semibold">{protocol.name}</h2>
             <p className="text-sm text-muted mt-1">
               {activeHand} hand · Attempt {currentAttemptNo} / {protocol.attemptCount}
+            </p>
+            <p className="text-xs text-muted mt-1">
+              {device.deviceLabel} · {capabilitySummary(device.capabilities)}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -652,11 +653,12 @@ export function GuidedTestScreen({
               tareRequired={tareRequired}
               canTare={canTare}
               hasMeaningfulLoad={hasMeaningfulLoad}
+              perFingerForce={perFingerForce}
               onTare={handleTare}
             />
           )}
 
-          {visiblePanelSet.has('contribution') && (
+          {visiblePanelSet.has('contribution') && perFingerForce && (
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="text-xs text-muted uppercase tracking-wide mb-3">Contribution</div>
               {hasMeaningfulLoad ? (
@@ -666,13 +668,13 @@ export function GuidedTestScreen({
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-muted">{FINGER_NAMES[i]}</span>
                         <span className="tabular-nums" style={{ color: FINGER_COLORS[i] }}>
-                          {latestPct[i].toFixed(1)}%
+                          {displayPct[i].toFixed(1)}%
                         </span>
                       </div>
                       <div className="h-2 rounded-full bg-surface-alt overflow-hidden">
                         <div
                           className="h-full"
-                          style={{ width: `${Math.max(0, Math.min(100, latestPct[i]))}%`, backgroundColor: FINGER_COLORS[i] }}
+                          style={{ width: `${Math.max(0, Math.min(100, displayPct[i]))}%`, backgroundColor: FINGER_COLORS[i] }}
                         />
                       </div>
                     </div>

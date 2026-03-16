@@ -62,6 +62,11 @@ export interface WorkoutBlock {
   cue?: string;
 }
 
+export interface CapabilityRequirements {
+  requiresTotalForce: boolean;
+  requiresPerFingerForce: boolean;
+}
+
 export interface WorkoutDefinition {
   id: string;
   kind: WorkoutKind;
@@ -81,6 +86,7 @@ export interface WorkoutDefinition {
   warmup: WarmupStep[];
   cooldown: string[];
   stopConditions: WorkoutStopCondition[];
+  capabilityRequirements: CapabilityRequirements;
   metrics: string[];
   scoringModel: string;
   progressionRule: string;
@@ -124,10 +130,10 @@ export interface BenchmarkScore {
   rfd200KgS: number | null;
   fatigueIndex: number;
   forceDriftKgS: number;
-  fingerContributionPct: Finger4;
+  fingerContributionPct: Finger4 | null;
   fingerAsymmetryPct: number | null;
-  redistributionScore: number;
-  stabilityScore: number;
+  redistributionScore: number | null;
+  stabilityScore: number | null;
   leftVsRightPct: number | null;
 }
 

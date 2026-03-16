@@ -38,6 +38,10 @@ function hydrateTemplate(raw: unknown): CustomTestTemplate | null {
     countdownSec: typeof source.countdownSec === 'number' && source.countdownSec > 0 ? source.countdownSec : 3,
     restSec: typeof source.restSec === 'number' && source.restSec >= 0 ? source.restSec : 120,
     target: source.target ?? { mode: 'none' },
+    capabilityRequirements: source.capabilityRequirements ?? {
+      requiresTotalForce: true,
+      requiresPerFingerForce: false,
+    },
     interval: source.interval
       ? {
           enabled: Boolean(source.interval.enabled),
@@ -75,6 +79,10 @@ export function createDefaultCustomTemplate(): CustomTestTemplate {
     countdownSec: 3,
     restSec: 120,
     target: { mode: 'none' },
+    capabilityRequirements: {
+      requiresTotalForce: true,
+      requiresPerFingerForce: false,
+    },
     interval: null,
     stopConditions: [],
     warmup: [],

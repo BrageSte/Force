@@ -1,7 +1,17 @@
 import { DEFAULT_LIVE_PANELS, DEFAULT_RESULT_WIDGETS } from './testConfig.ts';
 import type { TestId, TestProtocol } from './types.ts';
 
-export const TEST_LIBRARY: TestProtocol[] = [
+const TOTAL_ONLY_CAPABILITY = {
+  requiresTotalForce: true,
+  requiresPerFingerForce: false,
+} as const;
+
+const PER_FINGER_CAPABILITY = {
+  requiresTotalForce: true,
+  requiresPerFingerForce: true,
+} as const;
+
+const RAW_TEST_LIBRARY = [
   {
     protocolKind: 'builtin',
     id: 'standard_max',
@@ -313,7 +323,14 @@ export const TEST_LIBRARY: TestProtocol[] = [
     livePanels: DEFAULT_LIVE_PANELS,
     resultWidgets: DEFAULT_RESULT_WIDGETS,
   },
-];
+] satisfies Array<Omit<TestProtocol, 'capabilityRequirements'>>;
+
+export const TEST_LIBRARY: TestProtocol[] = RAW_TEST_LIBRARY.map(protocol => ({
+  capabilityRequirements: protocol.id === 'distribution_hold'
+    ? PER_FINGER_CAPABILITY
+    : TOTAL_ONLY_CAPABILITY,
+  ...protocol,
+}));
 
 export function getProtocolById(id: TestId): TestProtocol {
   const protocol = TEST_LIBRARY.find(p => p.id === id);

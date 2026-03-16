@@ -15,7 +15,7 @@ export function SettingsPage() {
   const hand = useAppStore(s => s.hand);
   const connected = useDeviceStore(s => s.connected);
   const statusMessages = useDeviceStore(s => s.statusMessages);
-  const latestChannelRaw = useLiveStore(s => s.latestChannelRaw);
+  const latestChannelRaw = useLiveStore(s => s.latestChannelRaw) ?? [0, 0, 0, 0];
   const latestMeasuredTotalKg = useLiveStore(s => s.latestMeasuredTotalKg);
   const [knownKgInputs, setKnownKgInputs] = useState(['', '', '', '']);
 
@@ -36,12 +36,7 @@ export function SettingsPage() {
     updateSettings({ [key]: value });
     if (key === 'inputMode' && connected) {
       const mode = streamModeForInputMode(value as InputMode);
-      const source = useDeviceStore.getState().source;
-      if (source?.setStreamMode) {
-        source.setStreamMode(mode);
-      } else {
-        useDeviceStore.getState().sendCommand(`m ${mode}`);
-      }
+      void useDeviceStore.getState().setInputMode(value as InputMode);
       useDeviceStore.getState().addStatus(`Requested ${mode.toUpperCase()} stream mode`);
     }
     pipeline.reconfigure();

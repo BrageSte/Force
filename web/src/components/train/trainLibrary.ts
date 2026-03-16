@@ -1,6 +1,16 @@
 import type { BenchmarkCategory, GripType, WorkoutModality } from '@krimblokk/core';
 import type { TrainPresetId, TrainProtocol } from './types.ts';
 
+const TOTAL_ONLY_CAPABILITY = {
+  requiresTotalForce: true,
+  requiresPerFingerForce: false,
+} as const;
+
+const PER_FINGER_CAPABILITY = {
+  requiresTotalForce: true,
+  requiresPerFingerForce: true,
+} as const;
+
 function block(args: {
   id: string;
   label: string;
@@ -91,6 +101,7 @@ function createTrainProtocol(args: {
       { kind: 'force_drop_pct', valuePct: 20, note: 'Stop if force drops more than 20% below target.' },
       { kind: 'manual_stop', note: 'Stop immediately if tissue discomfort or unsafe loading appears.' },
     ],
+    capabilityRequirements: args.id === 'finger_bias_accessory' ? PER_FINGER_CAPABILITY : TOTAL_ONLY_CAPABILITY,
     metrics: [
       'peak_force',
       'average_force',

@@ -185,6 +185,21 @@ export function CustomTestBuilderModal({
                   className="bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm text-text w-full resize-y"
                 />
               </FormField>
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-surface-alt px-3 py-3 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={draft.capabilityRequirements.requiresPerFingerForce}
+                  onChange={e => setDraft(current => ({
+                    ...current,
+                    capabilityRequirements: {
+                      ...current.capabilityRequirements,
+                      requiresPerFingerForce: e.target.checked,
+                    },
+                  }))}
+                  className="accent-blue-500"
+                />
+                <span>Requires per-finger force data</span>
+              </label>
             </Section>
 
             <Section title="Timing">

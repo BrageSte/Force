@@ -1,8 +1,9 @@
-import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
+import type { DeviceCapabilities, DeviceType, Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 import type {
   AthleteLevel,
   BenchmarkCategory,
   BenchmarkScore,
+  CapabilityRequirements,
   EffortClass,
   GripType,
   SafetyFlag,
@@ -147,6 +148,7 @@ export interface TestProtocol {
   bodyweightMultiplier?: number;
   targetIntensityLogic: string;
   stopConditions: WorkoutStopCondition[];
+  capabilityRequirements: CapabilityRequirements;
   warmup: WarmupStep[];
   cooldown: string[];
   scoringModel: string;
@@ -176,6 +178,7 @@ export interface CustomTestTemplate {
   target: TargetConfig;
   interval?: IntervalConfig | null;
   stopConditions?: WorkoutStopCondition[];
+  capabilityRequirements: CapabilityRequirements;
   warmup?: WarmupStep[];
   cooldown?: string[];
   livePanels: LivePanelId[];
@@ -300,6 +303,11 @@ export interface CompletedTestResult {
   builtInId?: TestId;
   tier: TestTier;
   hand: Hand;
+  deviceType?: DeviceType;
+  deviceName?: string;
+  capabilities?: DeviceCapabilities;
+  sampleSource?: string;
+  protocolVersion?: number;
   startedAtIso: string;
   completedAtIso: string;
   profile?: ProfileSnapshot | null;

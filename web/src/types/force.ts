@@ -1,6 +1,9 @@
 export {
   type FingerBool4,
   KG_TO_N,
+  type DeviceCapabilities,
+  type DeviceType,
+  type ConnectedDeviceInfo,
   type ProfileSex,
   type ProfileSnapshot,
   totalKg,

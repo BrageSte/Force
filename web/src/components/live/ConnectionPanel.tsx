@@ -1,19 +1,24 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { pipeline } from '../../pipeline/SamplePipeline.ts';
 import type { SourceKind } from '../../types/settings.ts';
 import { saveCurrentRecordingAsSession, sendTareCommand } from '../../live/sessionWorkflow.ts';
+import { defaultConnectedDevice, capabilitySummary } from '../../device/deviceProfiles.ts';
+import { DevicePickerModal } from '../device/DevicePickerModal.tsx';
 
 export function ConnectionPanel() {
   const sourceKind = useDeviceStore(s => s.sourceKind);
   const connected = useDeviceStore(s => s.connected);
+  const activeDevice = useDeviceStore(s => s.activeDevice);
   const recording = useLiveStore(s => s.recording);
   const hand = useAppStore(s => s.hand);
   const setHand = useAppStore(s => s.setHand);
   const preferredSource = useAppStore(s => s.settings.preferredSource);
   const updateSettings = useAppStore(s => s.updateSettings);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const selectedDevice = activeDevice ?? defaultConnectedDevice(sourceKind);
 
   useEffect(() => {
     if (!connected && sourceKind !== preferredSource) {
@@ -72,18 +77,20 @@ export function ConnectionPanel() {
   };
 
   return (
-    <div className="bg-surface rounded-xl border border-border p-4 space-y-4">
+    <>
+      <div className="bg-surface rounded-xl border border-border p-4 space-y-4">
       {/* Source + Connect */}
-      <div className="flex items-center gap-3">
-        <select
-          className="bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
-          value={sourceKind}
-          onChange={e => handleSourceChange(e.target.value as SourceKind)}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={() => setPickerOpen(true)}
           disabled={connected}
+          className="bg-surface-alt border border-border rounded-lg px-3 py-2 text-sm text-text disabled:opacity-40"
         >
-          <option value="Simulator">Simulator</option>
-          <option value="Serial">Serial (USB)</option>
-        </select>
+          {selectedDevice.deviceLabel}
+        </button>
+        <div className="text-xs text-muted">
+          {capabilitySummary(selectedDevice.capabilities)}
+        </div>
         <button
           onClick={handleConnect}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -119,7 +126,7 @@ export function ConnectionPanel() {
 
         <button
           onClick={handleTare}
-          disabled={!connected}
+          disabled={!connected || !selectedDevice.capabilities.tare}
           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-alt text-muted hover:text-text border border-border disabled:opacity-30 transition-colors"
         >
           Tare
@@ -139,6 +146,13 @@ export function ConnectionPanel() {
           {recording ? 'Stop & Save' : 'Record'}
         </button>
       </div>
-    </div>
+      </div>
+      <DevicePickerModal
+        open={pickerOpen}
+        selectedSourceKind={sourceKind}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSourceChange}
+      />
+    </>
   );
 }

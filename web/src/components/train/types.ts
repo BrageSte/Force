@@ -12,7 +12,7 @@ import type {
   WarmupStep,
   WorkoutTargetLogic,
 } from '@krimblokk/core';
-import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
+import type { DeviceCapabilities, DeviceType, Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 
 export type TrainPresetId =
   | 'strength_10s'
@@ -138,6 +138,11 @@ export interface TrainSessionResult {
   athleteLevel: AthleteLevel;
   sourceBasis: string;
   hand: Hand;
+  deviceType?: DeviceType;
+  deviceName?: string;
+  capabilities?: DeviceCapabilities;
+  sampleSource?: string;
+  protocolVersion?: number;
   gripType: GripType;
   modality: WorkoutModality;
   gripSpec: string;
@@ -166,6 +171,8 @@ export interface TrainSessionMeta {
   presetName: string;
   category: BenchmarkCategory;
   hand: Hand;
+  deviceType?: DeviceType;
+  deviceName?: string;
   profileId?: string;
   profileName?: string;
   targetKg: number;

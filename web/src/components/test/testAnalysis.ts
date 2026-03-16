@@ -13,6 +13,11 @@ interface AnalyzeContext {
   dashboardSnapshot?: DashboardConfigSnapshot;
   compareTags?: CompareTagSnapshot;
   profile?: ProfileSnapshot | null;
+  deviceType?: CompletedTestResult['deviceType'];
+  deviceName?: CompletedTestResult['deviceName'];
+  capabilities?: CompletedTestResult['capabilities'];
+  sampleSource?: CompletedTestResult['sampleSource'];
+  protocolVersion?: CompletedTestResult['protocolVersion'];
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -710,6 +715,11 @@ export function analyzeCompletedTest(
     builtInId: protocol.builtInId,
     tier: protocol.tier,
     hand,
+    deviceType: context?.deviceType,
+    deviceName: context?.deviceName,
+    capabilities: context?.capabilities,
+    sampleSource: context?.sampleSource,
+    protocolVersion: context?.protocolVersion ?? 1,
     startedAtIso,
     completedAtIso: new Date().toISOString(),
     profile: context?.profile ?? null,

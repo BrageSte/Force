@@ -2,7 +2,7 @@ import type { Finger4, Hand } from './types.ts';
 
 export type InputMode = 'MODE_KG_DIRECT' | 'MODE_RAW';
 export type SmoothingMode = 'NONE' | 'EMA' | 'MOVING_AVG';
-export type SourceKind = 'Serial' | 'Simulator' | 'BLE_UART';
+export type SourceKind = 'Serial' | 'Simulator' | 'BLE_UART' | 'Tindeq';
 
 export interface CalibrationData {
   offsets: number[];
@@ -81,7 +81,7 @@ function isSmoothingMode(value: unknown): value is SmoothingMode {
 }
 
 function isSourceKind(value: unknown): value is SourceKind {
-  return value === 'Serial' || value === 'Simulator' || value === 'BLE_UART';
+  return value === 'Serial' || value === 'Simulator' || value === 'BLE_UART' || value === 'Tindeq';
 }
 
 function isHand(value: unknown): value is Hand {

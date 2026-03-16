@@ -1,5 +1,11 @@
-import type { DataSource } from '../types/device.ts';
-import type { AcquisitionSample, Finger4, ForceSample, Hand } from '../types/force.ts';
+import type {
+  DataSource,
+  DeviceConnectionState,
+  DeviceError,
+  DeviceFrame,
+  DeviceProvider,
+} from '../types/device.ts';
+import type { AcquisitionSample, ConnectedDeviceInfo, Finger4, ForceSample, Hand } from '../types/force.ts';
 import { MultiChannelSmoother } from '../analytics/smoothing.ts';
 import { OnlineEffortDetector } from '../analytics/segmentation.ts';
 import { analyzeEffortSamples } from '../analytics/metrics.ts';
@@ -8,20 +14,96 @@ import { remapMeasurementToCanonicalFingers } from '../constants/fingers.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
 import { useAppStore } from '../stores/appStore.ts';
-import { isLikelyRawCounts } from '@krimblokk/core';
+import { isLikelyRawCounts, KG_TO_N, streamModeForInputMode, type InputMode } from '@krimblokk/core';
+import { defaultConnectedDevice } from '../device/deviceProfiles.ts';
+
+class InlineNativeSourceProvider implements DeviceProvider {
+  readonly displayName: string;
+  readonly sourceKind: 'Serial' | 'Simulator';
+
+  onForceData: ((frame: DeviceFrame) => void) | null = null;
+  onConnectionStateChange: ((state: DeviceConnectionState, device: ConnectedDeviceInfo | null) => void) | null = null;
+  onStatus: ((message: string) => void) | null = null;
+  onError: ((error: DeviceError) => void) | null = null;
+
+  private readonly source: DataSource;
+  private readonly device: ConnectedDeviceInfo;
+
+  constructor(source: DataSource, sourceKind: 'Serial' | 'Simulator') {
+    this.source = source;
+    this.sourceKind = sourceKind;
+    this.displayName = sourceKind === 'Simulator' ? 'Simulator' : 'BS Multi-Finger';
+    this.device = defaultConnectedDevice(sourceKind);
+  }
+
+  async scanDevices() {
+    return [{
+      id: this.sourceKind === 'Simulator' ? 'inline-native-simulator' : 'inline-native-serial',
+      sourceKind: this.sourceKind,
+      device: this.device,
+    }];
+  }
+
+  async connect(): Promise<void> {
+    this.onConnectionStateChange?.('connecting', null);
+    this.source.onSample = sample => this.onForceData?.({ kind: 'native-acquisition', sample });
+    this.source.onStatus = message => this.onStatus?.(message);
+    this.source.onConnectionChange = connected => {
+      this.onConnectionStateChange?.(connected ? 'connected' : 'idle', connected ? this.device : null);
+    };
+    await this.source.start();
+    this.onConnectionStateChange?.('connected', this.device);
+  }
+
+  async disconnect(): Promise<void> {
+    this.onConnectionStateChange?.('disconnecting', this.device);
+    this.source.stop();
+    this.onConnectionStateChange?.('idle', null);
+  }
+
+  async tare(): Promise<void> {
+    this.source.sendCommand?.('t');
+  }
+
+  async startStreaming(): Promise<void> {}
+  async stopStreaming(): Promise<void> {}
+  async getBatteryStatus(): Promise<number | null> {
+    return null;
+  }
+
+  async sendCommand(cmd: string): Promise<boolean> {
+    if (!this.source.sendCommand) return false;
+    this.source.sendCommand(cmd);
+    return true;
+  }
+
+  async setInputMode(inputMode: InputMode): Promise<void> {
+    this.source.setStreamMode?.(streamModeForInputMode(inputMode));
+  }
+
+  isConnected(): boolean {
+    return this.source.isRunning();
+  }
+
+  getConnectedDevice() {
+    return this.source.isRunning() ? this.device : null;
+  }
+}
 
 /** Singleton pipeline that wires a DataSource to the Zustand stores. */
 export class SamplePipeline {
-  private source: DataSource | null = null;
-  private smoother: MultiChannelSmoother;
+  private provider: DeviceProvider | null = null;
+  private nativeSmoother: MultiChannelSmoother;
   private detector: OnlineEffortDetector;
   private sampleCounter = 0;
   private rawAutoswitchDone = false;
   private measurementHand: Hand | null = null;
+  private totalEmaState: number | null = null;
+  private totalMaBuf: number[] = [];
 
   constructor() {
     const settings = useAppStore.getState().settings;
-    this.smoother = new MultiChannelSmoother(
+    this.nativeSmoother = new MultiChannelSmoother(
       settings.smoothingMode,
       settings.smoothingAlpha,
       settings.smoothingWindow,
@@ -39,11 +121,12 @@ export class SamplePipeline {
     const settings = useAppStore.getState().settings;
     this.rawAutoswitchDone = false;
     useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds);
-    this.smoother.reconfigure(
+    this.nativeSmoother.reconfigure(
       settings.smoothingMode,
       settings.smoothingAlpha,
       settings.smoothingWindow,
     );
+    this.resetTotalSmoother();
     this.detector = new OnlineEffortDetector({
       startThresholdKg: settings.startThresholdKg,
       stopThresholdKg: settings.stopThresholdKg,
@@ -52,42 +135,48 @@ export class SamplePipeline {
     });
   }
 
-  async connect(sourceOverride?: DataSource): Promise<void> {
+  async connect(sourceOverride?: DeviceProvider | DataSource): Promise<void> {
     this.disconnect();
 
     const deviceStore = useDeviceStore.getState();
     const settings = useAppStore.getState().settings;
-    const source = sourceOverride ?? deviceStore.createSource(deviceStore.sourceKind, settings.inputMode);
-    this.source = source;
+    const provider = this.createProvider(sourceOverride, deviceStore.sourceKind, settings.inputMode);
+    this.provider = provider;
     this.sampleCounter = 0;
     this.rawAutoswitchDone = false;
     this.measurementHand = null;
-    this.smoother.reset();
+    this.nativeSmoother.reset();
+    this.resetTotalSmoother();
     this.detector.reset();
     useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds);
 
-    source.onSample = this.handleSample;
-    source.onStatus = (msg) => useDeviceStore.getState().addStatus(msg);
-    source.onConnectionChange = (c) => useDeviceStore.getState().setConnected(c);
+    provider.onForceData = this.handleFrame;
+    provider.onStatus = (msg) => useDeviceStore.getState().addStatus(msg);
+    provider.onError = (error) => useDeviceStore.getState().addStatus(error.message);
+    provider.onConnectionStateChange = (state, device) => {
+      useDeviceStore.getState().setConnectionState(state, device);
+    };
 
-    deviceStore.setSource(source);
-    await source.start();
+    deviceStore.setProvider(provider);
+    await provider.connect();
   }
 
   disconnect(): void {
     this.finalizeActiveEffort();
 
-    if (this.source) {
-      this.source.stop();
-      this.source = null;
+    if (this.provider) {
+      void this.provider.disconnect();
+      this.provider = null;
     }
 
     this.detector.reset();
-    this.smoother.reset();
+    this.nativeSmoother.reset();
+    this.resetTotalSmoother();
     this.rawAutoswitchDone = false;
     this.measurementHand = null;
-    useDeviceStore.getState().setSource(null);
-    useDeviceStore.getState().setConnected(false);
+    useDeviceStore.getState().setProvider(null);
+    useDeviceStore.getState().setConnectedDevice(null);
+    useDeviceStore.getState().setConnectionState('idle', null);
   }
 
   finalizeActiveEffort(): void {
@@ -96,7 +185,16 @@ export class SamplePipeline {
     }
   }
 
-  private handleSample = (acq: AcquisitionSample): void => {
+  private handleFrame = (frame: DeviceFrame): void => {
+    if (frame.kind === 'native-acquisition') {
+      this.handleNativeSample(frame.sample);
+      return;
+    }
+
+    this.handleNormalizedSample(frame.sample);
+  };
+
+  private handleNativeSample(acq: AcquisitionSample): void {
     this.sampleCounter++;
     let settings = useAppStore.getState().settings;
     this.maybeAutoSwitchToRaw(acq.values, settings);
@@ -115,7 +213,7 @@ export class SamplePipeline {
     const kgByFinger = remapMeasurementToCanonicalFingers(measurementHand, kgValues);
 
     // Smoothing
-    const kgSmoothed = this.smoother.apply(kgByFinger);
+    const kgSmoothed = this.nativeSmoother.apply(kgByFinger);
     const rawTotal = kgSmoothed[0] + kgSmoothed[1] + kgSmoothed[2] + kgSmoothed[3];
     const tareRequired = rawTotal <= -1 || kgSmoothed.some(v => v <= -1);
     const kgClamped: Finger4 = [
@@ -127,28 +225,53 @@ export class SamplePipeline {
 
     const forceSample: ForceSample = {
       tMs: acq.tMs,
+      source: 'native-bs',
       raw: rawByFinger,
       kg: kgClamped,
+      totalKg: kgClamped[0] + kgClamped[1] + kgClamped[2] + kgClamped[3],
+      totalN: (kgClamped[0] + kgClamped[1] + kgClamped[2] + kgClamped[3]) * KG_TO_N,
+      stability: null,
     };
 
+    this.commitSample(forceSample, { tareRequired, channelRaw });
+  }
+
+  private handleNormalizedSample(sample: ForceSample): void {
+    this.sampleCounter++;
+    const totalSmoothed = this.applyTotalSmoothing(sample.totalKg);
+    const totalClamped = Math.max(0, totalSmoothed);
+    const normalizedSample: ForceSample = {
+      ...sample,
+      totalKg: totalClamped,
+      totalN: totalClamped * KG_TO_N,
+      raw: null,
+      kg: null,
+    };
+
+    this.commitSample(normalizedSample, {
+      tareRequired: totalSmoothed <= -1,
+    });
+  }
+
+  private commitSample(sample: ForceSample, meta?: { tareRequired?: boolean; channelRaw?: Finger4 }): void {
     const liveStore = useLiveStore.getState();
+    const settings = useAppStore.getState().settings;
 
     // Push to ring buffer
-    liveStore.pushSample(forceSample, { tareRequired, channelRaw });
+    liveStore.pushSample(sample, meta);
 
     // Recording
     if (liveStore.recording) {
-      liveStore.appendRecordedSample(forceSample);
+      liveStore.appendRecordedSample(sample);
     }
 
     // Segmentation
-    const total = kgClamped[0] + kgClamped[1] + kgClamped[2] + kgClamped[3];
-    const evt = this.detector.update(this.sampleCounter, forceSample.tMs, total);
+    const evt = this.detector.update(this.sampleCounter, sample.tMs, sample.totalKg);
 
     if (evt.started) {
-      liveStore.startEffortAccum(forceSample);
+      liveStore.startEffortAccum(sample);
     } else if (this.detector.active) {
-      liveStore.appendEffortSample(forceSample);
+      liveStore.appendEffortSample(sample);
     }
 
     // Live effort analysis (every few samples during active effort)
@@ -169,7 +292,7 @@ export class SamplePipeline {
     if (evt.ended) {
       this.finalizeCurrentEffort();
     }
-  };
+  }
 
   private resolveMeasurementHand(): Hand {
     const live = useLiveStore.getState();
@@ -179,7 +302,8 @@ export class SamplePipeline {
   private syncMeasurementHand(hand: Hand): void {
     if (this.measurementHand === hand) return;
     this.measurementHand = hand;
-    this.smoother.reset();
+    this.nativeSmoother.reset();
+    this.resetTotalSmoother();
     this.detector.reset();
     useLiveStore.getState().clearEffortAccum();
   }
@@ -197,11 +321,7 @@ export class SamplePipeline {
 
     this.rawAutoswitchDone = true;
     useAppStore.getState().updateSettings({ inputMode: 'MODE_RAW' });
-    if (this.source?.setStreamMode) {
-      this.source.setStreamMode('raw');
-    } else {
-      useDeviceStore.getState().sendCommand('m raw');
-    }
+    void useDeviceStore.getState().setInputMode('MODE_RAW');
     useDeviceStore.getState().addStatus(
       'Detected raw counts while MODE_KG_DIRECT was active. Switched to MODE_RAW automatically.',
     );
@@ -229,6 +349,47 @@ export class SamplePipeline {
     if (liveStore.recording) {
       liveStore.addRecordedEffort(metrics);
     }
+  }
+
+  private createProvider(
+    sourceOverride: DeviceProvider | DataSource | undefined,
+    sourceKind: ReturnType<typeof useDeviceStore.getState>['sourceKind'],
+    inputMode: InputMode,
+  ): DeviceProvider {
+    if (!sourceOverride) {
+      return useDeviceStore.getState().createProvider(sourceKind, inputMode);
+    }
+    if ('scanDevices' in sourceOverride) {
+      return sourceOverride;
+    }
+    const nativeKind = sourceKind === 'Simulator' ? 'Simulator' : 'Serial';
+    return new InlineNativeSourceProvider(sourceOverride, nativeKind);
+  }
+
+  private resetTotalSmoother(): void {
+    this.totalEmaState = null;
+    this.totalMaBuf = [];
+  }
+
+  private applyTotalSmoothing(totalKg: number): number {
+    const settings = useAppStore.getState().settings;
+    if (settings.smoothingMode === 'NONE') return totalKg;
+
+    if (settings.smoothingMode === 'EMA') {
+      if (this.totalEmaState === null) {
+        this.totalEmaState = totalKg;
+      } else {
+        this.totalEmaState = settings.smoothingAlpha * totalKg + (1 - settings.smoothingAlpha) * this.totalEmaState;
+      }
+      return this.totalEmaState;
+    }
+
+    this.totalMaBuf.push(totalKg);
+    if (this.totalMaBuf.length > settings.smoothingWindow) {
+      this.totalMaBuf.shift();
+    }
+    const sum = this.totalMaBuf.reduce((acc, value) => acc + value, 0);
+    return sum / this.totalMaBuf.length;
   }
 }
 

@@ -21,7 +21,7 @@ function collectSafetyFlags(results: Array<CompletedTestResult | null>): SafetyF
 
 function weakFingerIndices(results: Array<CompletedTestResult | null>): number[] {
   const values = results
-    .filter((result): result is CompletedTestResult => result !== null)
+    .filter((result): result is CompletedTestResult => result !== null && result.capabilities?.perFingerForce !== false)
     .map(result => result.summary.weakestContributor);
   return Array.from(new Set(values));
 }
@@ -36,10 +36,16 @@ export function buildAthleteForceProfile(results: CompletedTestResult[], hand: H
   const explosive = latestForProtocol(results, 'explosive_pull', hand);
   const health = latestForProtocol(results, 'distribution_hold', hand) ?? latestForProtocol(results, 'health_capacity_benchmark', hand);
   const forceCurve = latestForProtocol(results, 'force_curve_profile', hand);
+  const perFingerMax = max?.capabilities?.perFingerForce === false ? null : max;
+  const perFingerRepeated = repeated?.capabilities?.perFingerForce === false ? null : repeated;
+  const perFingerHealth = health?.capabilities?.perFingerForce === false ? null : health;
+  const perFingerForceCurve = forceCurve?.capabilities?.perFingerForce === false ? null : forceCurve;
   const profileType = inferProfileType([forceCurve, explosive, max, repeated, health]);
-  const weakFingers = weakFingerIndices([forceCurve, max, repeated]);
+  const weakFingers = weakFingerIndices([perFingerForceCurve, perFingerMax, perFingerRepeated]);
   const unstablePattern = mean([health?.summary.repeatabilityScore ?? 100, max?.summary.repeatabilityScore ?? 100]) < 74;
-  const compensationRisk = collectSafetyFlags([forceCurve, health, repeated]).some(flag => flag.code === 'compensation_risk' || flag.code === 'single_finger_overload');
+  const compensationRisk = collectSafetyFlags([perFingerForceCurve, perFingerHealth, perFingerRepeated]).some(
+    flag => flag.code === 'compensation_risk' || flag.code === 'single_finger_overload',
+  );
 
   const strengths: string[] = [];
   const limitations: string[] = [];
@@ -91,12 +97,13 @@ export function buildTrainRecommendations(results: CompletedTestResult[], hand: 
   const explosive = latestForProtocol(results, 'explosive_pull', hand);
   const health = latestForProtocol(results, 'distribution_hold', hand) ?? latestForProtocol(results, 'health_capacity_benchmark', hand);
   const forceCurve = latestForProtocol(results, 'force_curve_profile', hand);
+  const perFingerForceCurve = forceCurve?.capabilities?.perFingerForce === false ? null : forceCurve;
   const athleteProfile = buildAthleteForceProfile(results, hand);
 
   const peakRelative = max?.summary.normalizedPeakKgPerKgBodyweight ?? 0;
   const rfd = mean(explosive?.attempts.map(attempt => attempt.advanced?.rfd100KgS ?? 0) ?? []);
   const fatigueIndex = mean(repeated?.attempts.map(attempt => attempt.advanced?.fatigueIndex ?? 0) ?? []);
-  const redistribution = mean(forceCurve?.attempts.map(attempt => attempt.advanced?.redistributionScore ?? 0) ?? []);
+  const redistribution = mean(perFingerForceCurve?.attempts.map(attempt => attempt.advanced?.redistributionScore ?? 0) ?? []);
   const safetyFlags = collectSafetyFlags([max, repeated, explosive, health, forceCurve]);
   const weakFinger = athleteProfile.weakFingers[0];
   const recommendations: TrainRecommendation[] = [];
@@ -165,7 +172,7 @@ export function buildTrainRecommendations(results: CompletedTestResult[], hand: 
     }));
   }
 
-  if (forceCurve) {
+  if (perFingerForceCurve) {
     recommendations.push(makeRecommendation({
       workoutId: 'individualized_force_curve',
       hand,
