@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR } from '../../constants/fingers.ts';
 import { ResultCurveChart, type ResultCurveSeries } from '../analysis/ResultCurveChart.tsx';
 import { buildTrainRepCurveSummary, strongestFingerInTrainRep } from '../analysis/forceCurveViewModel.ts';
@@ -24,13 +24,23 @@ export function TrainRepCurvePanel({
   targetKg,
   fingerOrder,
 }: TrainRepCurvePanelProps) {
+  return (
+    <TrainRepCurvePanelBody
+      key={selectedSet.key}
+      selectedSet={selectedSet}
+      targetKg={targetKg}
+      fingerOrder={fingerOrder}
+    />
+  );
+}
+
+function TrainRepCurvePanelBody({
+  selectedSet,
+  targetKg,
+  fingerOrder,
+}: TrainRepCurvePanelProps) {
   const [selectedRepKey, setSelectedRepKey] = useState<string | null>(selectedSet.reps[0] ? repKey(selectedSet.reps[0]) : null);
   const [fingerIdx, setFingerIdx] = useState<number>(selectedSet.reps[0] ? strongestFingerInTrainRep(selectedSet.reps[0]) : 0);
-
-  useEffect(() => {
-    setSelectedRepKey(selectedSet.reps[0] ? repKey(selectedSet.reps[0]) : null);
-    setFingerIdx(selectedSet.reps[0] ? strongestFingerInTrainRep(selectedSet.reps[0]) : 0);
-  }, [selectedSet.key]);
 
   const selectedRep = useMemo(
     () => selectedSet.reps.find(rep => repKey(rep) === selectedRepKey) ?? selectedSet.reps[0] ?? null,

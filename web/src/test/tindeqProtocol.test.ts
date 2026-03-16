@@ -7,6 +7,31 @@ import {
   TINDEQ_RESPONSES,
 } from '../device/tindeqProtocol.ts'
 
+type TindeqProviderHarness = {
+  handleNotification: (event: BluetoothCharacteristicValueChangedEvent) => void
+  handleDisconnected: () => void
+  device: {
+    removeEventListener: () => void
+    addEventListener: () => void
+    gatt: null
+  } | null
+  shouldReconnect: boolean
+  connectedDevice: ReturnType<typeof defaultConnectedDevice> | null
+  reconnectAttempts: number
+}
+
+function asHarness(provider: TindeqDeviceProvider): TindeqProviderHarness {
+  return provider as unknown as TindeqProviderHarness
+}
+
+function makeNotificationEvent(payload: Uint8Array): BluetoothCharacteristicValueChangedEvent {
+  return {
+    target: {
+      value: new DataView(payload.buffer),
+    },
+  } as unknown as BluetoothCharacteristicValueChangedEvent
+}
+
 function makeBatteryPayload(batteryMv: number): Uint8Array {
   const payload = new Uint8Array(6)
   payload[0] = TINDEQ_RESPONSES.batteryVoltage
@@ -59,17 +84,14 @@ describe('tindeq protocol adapter', () => {
 describe('tindeq provider', () => {
   it('normalizes notifications into total-force-only samples', () => {
     const provider = new TindeqDeviceProvider()
+    const harness = asHarness(provider)
     const frames: unknown[] = []
     provider.onForceData = frame => frames.push(frame)
 
-    ;(provider as any).handleNotification({
-      target: {
-        value: new DataView(makeWeightPayload([
-          { weightKg: 12.5, timestampUs: 1000 },
-          { weightKg: 13.25, timestampUs: 26000 },
-        ]).buffer),
-      },
-    })
+    harness.handleNotification(makeNotificationEvent(makeWeightPayload([
+      { weightKg: 12.5, timestampUs: 1000 },
+      { weightKg: 13.25, timestampUs: 26000 },
+    ])))
 
     expect(frames).toHaveLength(2)
     expect(frames[0]).toMatchObject({
@@ -94,39 +116,39 @@ describe('tindeq provider', () => {
 
   it('surfaces malformed payload errors', () => {
     const provider = new TindeqDeviceProvider()
+    const harness = asHarness(provider)
     const errors: string[] = []
     provider.onError = error => errors.push(error.code)
 
-    ;(provider as any).handleNotification({
-      target: {
-        value: new DataView(new Uint8Array([TINDEQ_RESPONSES.weightMeasurement, 8, 1, 2, 3]).buffer),
-      },
-    })
+    harness.handleNotification(
+      makeNotificationEvent(new Uint8Array([TINDEQ_RESPONSES.weightMeasurement, 8, 1, 2, 3])),
+    )
 
     expect(errors).toContain('malformed_payload')
   })
 
   it('handles disconnect and reconnect-failure states', () => {
     const provider = new TindeqDeviceProvider()
+    const harness = asHarness(provider)
     const states: string[] = []
     const errors: string[] = []
     provider.onConnectionStateChange = state => states.push(state)
     provider.onError = error => errors.push(error.code)
 
-    ;(provider as any).device = {
+    harness.device = {
       removeEventListener() {},
       addEventListener() {},
       gatt: null,
     }
 
-    ;(provider as any).shouldReconnect = false
-    ;(provider as any).handleDisconnected()
+    harness.shouldReconnect = false
+    harness.handleDisconnected()
     expect(states.at(-1)).toBe('idle')
 
-    ;(provider as any).connectedDevice = defaultConnectedDevice('Tindeq')
-    ;(provider as any).shouldReconnect = true
-    ;(provider as any).reconnectAttempts = 1
-    ;(provider as any).handleDisconnected()
+    harness.connectedDevice = defaultConnectedDevice('Tindeq')
+    harness.shouldReconnect = true
+    harness.reconnectAttempts = 1
+    harness.handleDisconnected()
     expect(errors).toContain('reconnect_failure')
     expect(states.at(-1)).toBe('error')
   })

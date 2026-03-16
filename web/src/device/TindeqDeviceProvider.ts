@@ -200,7 +200,8 @@ export class TindeqDeviceProvider implements DeviceProvider {
     return batteryMv;
   }
 
-  async sendCommand(_cmd: string): Promise<boolean> {
+  async sendCommand(cmd: string): Promise<boolean> {
+    void cmd;
     const error: DeviceError = {
       code: 'unsupported_command',
       message: 'Raw command strings are not supported for Tindeq Progressor.',
@@ -209,7 +210,8 @@ export class TindeqDeviceProvider implements DeviceProvider {
     return false;
   }
 
-  async sendDeviceCommand(_command: DeviceCommand): Promise<boolean> {
+  async sendDeviceCommand(command: DeviceCommand): Promise<boolean> {
+    void command;
     const error: DeviceError = {
       code: 'unsupported_command',
       message: 'Only tare/start/stop/battery commands are supported for Tindeq Progressor in this build.',

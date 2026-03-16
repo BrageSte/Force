@@ -4,6 +4,10 @@ import { getDB } from '../storage/db.ts'
 import type { SessionPayload } from '../types/force.ts'
 import { defaultConnectedDevice } from '../device/deviceProfiles.ts'
 
+type LegacySessionPayload =
+  Omit<SessionPayload, 'deviceType' | 'deviceName' | 'capabilities' | 'sampleSource' | 'protocolVersion'>
+  & Partial<Pick<SessionPayload, 'deviceType' | 'deviceName' | 'capabilities' | 'sampleSource' | 'protocolVersion'>>
+
 function makeSession(sessionId: string, overrides: Partial<SessionPayload> = {}): SessionPayload {
   const device = defaultConnectedDevice('Tindeq')
   return {
@@ -52,7 +56,7 @@ describe('session persistence for tindeq', () => {
   it('hydrates legacy sessions without device metadata as native sessions', async () => {
     const sessionId = `legacy_${Date.now()}`
     const db = await getDB()
-    await db.put('sessions', {
+    const legacySession = {
       sessionId,
       startedAtIso: '2026-03-16T09:00:00.000Z',
       endedAtIso: '2026-03-16T09:05:00.000Z',
@@ -72,7 +76,8 @@ describe('session persistence for tindeq', () => {
       },
       efforts: [],
       samples: [],
-    } as any)
+    } satisfies LegacySessionPayload
+    await db.put('sessions', legacySession as unknown as SessionPayload)
 
     const loaded = await loadSession(sessionId)
 
