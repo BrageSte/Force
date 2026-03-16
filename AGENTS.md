@@ -12,11 +12,11 @@ Do not skip these files. They define the current product purpose, the active Ard
 
 - Preserve the current `web/` UI structure unless a change fixes a bug, clarifies a contract, or supports the migration architecture.
 - Treat `web/` as the primary product direction.
-- Treat `app/` as a legacy/reference fallback until shared core parity is reached.
+- Treat `web/` and `packages/core/` as the only active product surfaces in this repository.
 - Use the hardware profile names from `docs/PROJECT_STYRING.md` instead of informal descriptions:
   - `CURRENT_UNO_HX711`
   - `TARGET_XIAO_BLE_HX711`
 
 ## Working Rule
 
-When the code and documentation disagree, update the code or docs so that `PROJECT_CONTEXT.md` and `docs/PROJECT_STYRING.md` remain the authoritative baseline.
+When the code and documentation disagree, update the code or docs so that `PROJECT_CONTEXT.md` and `docs/PROJECT_STYRING.md` remain the authoritative baseline. Do not reintroduce an alternative desktop/runtime surface without updating those documents first.

@@ -1,6 +1,6 @@
 # Krimblokk Web
 
-Primary product surface for Krimblokk. This is the browser application that runs against the current `CURRENT_UNO_HX711` hardware profile over Web Serial.
+Primary product surface for Krimblokk. This browser application runs against the current `CURRENT_UNO_HX711` hardware profile over Web Serial and also supports Tindeq Progressor as a total-force-only BLE source.
 
 ## Stack
 
@@ -34,6 +34,12 @@ npm run lint
 npm run build
 ```
 
+Run tests:
+
+```bash
+npm run test
+```
+
 ## Implemented MVP Scope
 
 - Live force ingestion from `Simulator` and `Serial`
@@ -55,5 +61,6 @@ npm run build
 ## Notes
 
 - Web Serial requires a Chromium browser and secure context (`https` or `localhost`).
+- Web Bluetooth device flows also require a secure context.
 - All new user-facing product work should happen here or in `packages/core/`.
-- The Python app in `app/` is legacy reference code only and should not be used as the active UI.
+- For hosted deployment, publish the generated `dist/` output and ensure SPA fallback to `index.html`.

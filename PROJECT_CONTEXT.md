@@ -6,7 +6,7 @@ This file is the mandatory first read for any agent or LLM working in this repos
 
 Krimblokk is a four-channel finger force measurement product. It reads force from four sensors, maps them to Index, Middle, Ring, and Pinky, and presents live force, test workflows, session analysis, and history.
 
-The current usable operator surface is the `web/` application. The older `app/` desktop program still exists in the repository as a legacy code reference while the shared TypeScript domain layer replaces duplicated logic, but it should not be treated as the active operator surface.
+The current usable and shippable operator surface is the `web/` application. Product-facing work in this repository now lives only in `web/` and `packages/core/`.
 
 ## Why It Exists
 
@@ -48,10 +48,7 @@ Current firmware assumptions:
 - `web/`
   - active UI baseline and primary direction
   - runs in browser with Web Serial today
-- `app/`
-  - older Python desktop application
-  - retained only as legacy reference while TypeScript parity is built
-  - not for active use, packaging, or distribution
+  - supports hosted deployment as a secure-context web app
 - `packages/core/`
   - shared TypeScript domain logic for parsing, calibration, smoothing, segmentation, metrics, and session analysis
 
@@ -87,7 +84,6 @@ Active now:
 - Web Serial transport
 - Tindeq Progressor external BLE path for total-force-only capture
 - simulator path for development
-- `app/` as legacy reference only
 
 Planned later:
 
@@ -138,9 +134,9 @@ Status/debug lines:
 ## Current Non-Negotiable Direction
 
 - Keep the current `web/` UI structure stable while cleaning up internals.
-- Do not remove `app/` yet, but do not use it as the active product surface.
 - Do not invent new transport contracts outside the shared core package.
 - Future hardware/software migration must map back to `CURRENT_UNO_HX711` and forward to `TARGET_XIAO_BLE_HX711`.
 - New product-facing work belongs in `web/` and `packages/core`.
 - `CURRENT_UNO_HX711` remains the only full-fidelity per-finger hardware profile in active use.
 - Tindeq Progressor is a first-class external device source, but it is total-force-only and must not simplify the native four-finger data model.
+- Hosted deployment must preserve secure-context browser requirements for Web Serial and Web Bluetooth features.

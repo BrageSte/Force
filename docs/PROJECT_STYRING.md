@@ -11,7 +11,7 @@ I scope:
 - rydde transport- og kalibreringskontrakter
 - flytte delt domenelogikk til `packages/core`
 - dokumentere dagens og fremtidig hardware/software tydelig
-- beholde `app/` som legacy/reference uten aktiv bruk
+- holde repoet web-only og fjerne utfaset desktop-surface
 
 Utenfor scope i denne fasen:
 
@@ -55,11 +55,7 @@ Aktive flater:
   - felles TypeScript domene- og kontraktslag
 
 Referanseflater:
-
-- `app/`
-  - Python desktop legacy-reference
-  - brukes som kode- og parityreferanse til web/core overtar fullt
-  - skal ikke brukes som aktiv produktflate
+- ingen
 
 ## Maalarkitektur
 
@@ -94,15 +90,10 @@ Planlagt softwarearkitektur:
   - Dato: 2026-03-11
   - Begrunnelse: browserbasert UI gir rask iterasjon mens mobil/BLE bygges senere.
 
-- `app/` beholdes som legacy/reference inntil TS-paritet er god nok.
+- Den gamle desktop-surface er fjernet fra repoet.
   - Status: aktiv
-  - Dato: 2026-03-11
-  - Begrunnelse: Python-koden inneholder eksisterende analysemassasje og er nyttig som referanse under migrering.
-
-- `app/` skal ikke brukes som aktiv operativ flate lenger.
-  - Status: aktiv
-  - Dato: 2026-03-15
-  - Begrunnelse: produktretningen er web na, mens framtidig sluttflate er BLE-tilkoblet mobilapp.
+  - Dato: 2026-03-16
+  - Begrunnelse: `web/` og `packages/core` dekker produktretningen, og repoet skal vaere klarere for deling, hosting og videre produktisering.
 
 - Repoet skal holdes fritt for lokale runtime-artefakter og byggeoutput.
   - Status: aktiv
@@ -141,10 +132,10 @@ Planlagt softwarearkitektur:
 
 ## Risikoer
 
-- Risiko: web- og app-analytics driver fra hverandre igjen.
-  - Konsekvens: ulike tall for samme test.
-  - Sannsynlighet: hoy hvis ny logikk legges to steder.
-  - Tiltak: all ny domenelogikk flyttes til `packages/core`, og Python brukes som referanse inntil parity er bekreftet.
+- Risiko: analytics blir duplisert direkte i `web/` i stedet for `packages/core`.
+  - Konsekvens: ulike tall mellom skjermer og framtidige klienter.
+  - Sannsynlighet: middels.
+  - Tiltak: all ny domenelogikk flyttes til `packages/core`, og web bygger videre pa delte kontrakter.
 
 - Risiko: bruker tror `MODE_KG_DIRECT` og `MODE_RAW` betyr det samme.
   - Konsekvens: feilkalibrering eller misvisende kraftverdier.
@@ -167,11 +158,11 @@ Fasen er godkjent nar:
 
 - `web/` fungerer fortsatt mot dagens `CURRENT_UNO_HX711`-oppsett.
 - Hovedsider og navigasjon i web er ikke redesignet.
-- README og styringsdokumenter peker nye brukere til `web/`, ikke `app/`.
+- README og styringsdokumenter peker nye brukere til `web/`.
 - Domenelogikk for parsing, kalibrering, smoothing, segmentering, metrics og session analysis er flyttet til `packages/core`.
 - Repoet har `AGENTS.md`, `PROJECT_CONTEXT.md` og dette styringsdokumentet pa plass.
 - Web har automatiske tester for parser, settings-normalisering, raw/kg-modus og lagring.
-- Python-testkjoring er robust baade via `python -m pytest` og vanlig `pytest`.
+- Repoet inneholder ikke utfaset desktop-app eller desktop-spesifikke instruksjoner.
 
 Manuell verifisering som kreves senere pa fysisk hardware:
 
@@ -185,7 +176,7 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 ## Milepaeler
 
 - Milepael 1: stabil web/core kontrakt pa dagens UNO serial-oppsett
-- Milepael 2: parity mellom Python-referanse og TS-core for sentrale metrics
+- Milepael 2: ren web-only repo- og deploy-baseline
 - Milepael 3: XIAO firmware spike med samme command/sample-kontrakt
 - Milepael 4: BLE-klient i mobilapp
 - Milepael 5: eventuell webtjeneste og synk/admin-funksjoner
@@ -194,5 +185,5 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 
 - 2026-03-11: Opprettet formell styringsbaseline for web-first migrering.
 - 2026-03-11: Formaliserte hardwareprofilene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
-- 2026-03-11: Fastla at `app/` beholdes som referanse/legacy mens `web/` og `packages/core` tar over som hovedretning.
 - 2026-03-15: Ryddet repoet for lokale runtime-artefakter og tydeliggjorde `web/` som eneste aktive produktflate.
+- 2026-03-16: Fjernet utfaset desktop-surface fra repoet og oppdaterte dokumentasjonen til web-only baseline.

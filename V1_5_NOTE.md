@@ -6,15 +6,15 @@ Intent:
 
 - make `web/` the only active operator surface
 - keep benchmark, prescription, and train-runner work inside the TypeScript/web stack
-- preserve `app/` only as a legacy analytics reference until parity is fully covered by `web/` and `packages/core`
+- keep shared product logic in `packages/core`
 - prepare the project for a shareable web application now and a BLE-connected mobile app later
 
 Working rules for this version:
 
 - run, demo, and validate from `web/`
 - keep shared parsing, calibration, metrics, and workout logic in `packages/core`
-- do not add new product-facing features to `app/`
 - remove local runtime artifacts before committing so the repo stays clean for GitHub and future productization
+- keep hosted deployment requirements explicit: secure context, supported browser, and static SPA hosting
 
 Read order for work in this repository:
 

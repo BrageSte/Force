@@ -1,26 +1,16 @@
 # Krimblokk v1.5
 
-Krimblokk is a four-channel finger-force measurement system for structured testing, live capture, and session review. In this repository, `web/` is the active product surface and the only UI that should be used for normal operation.
+Krimblokk is a four-channel finger-force measurement system for structured testing, live capture, guided training, and session review. This repository is now web-only: `web/` is the product surface, `packages/core/` holds shared domain logic, and `firmware/` contains the Arduino firmware for the current wired hardware.
 
-Read [V1_5_NOTE.md](V1_5_NOTE.md) for the purpose of this version, then [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture, migration, and roadmap decisions, also read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training logic are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md).
+Start with [V1_5_NOTE.md](V1_5_NOTE.md), then read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture and roadmap direction, read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training behavior are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md).
 
-## Product Direction
-
-Current baseline:
+## Current Product Baseline
 
 - hardware profile `CURRENT_UNO_HX711`
 - Arduino UNO + 4 x HX711 + 4 x load cell channels
-- wired serial transport
-- `web/` as the active browser UI
-
-Target direction:
-
-- hardware profile `TARGET_XIAO_BLE_HX711`
-- compact XIAO BLE based device
-- BLE-connected mobile app later
-- optional web service or hosted workflows later
-
-`app/` remains in the repository only as a legacy Python reference while logic is consolidated in TypeScript. It is not the product surface to run, package, or share with users.
+- wired serial transport for full per-finger capture
+- Tindeq Progressor support for total-force-only BLE capture
+- `web/` as the only operator UI in this repository
 
 ## Repository Layout
 
@@ -34,22 +24,17 @@ packages/
 
 web/
   src/
-
-app/
-  ... legacy Python reference only
 ```
 
 ## Active Surfaces
 
 - `web/`
-  - current product UI
-  - browser app with Web Serial against `CURRENT_UNO_HX711`
+  - browser application for live capture, test workflows, training workflows, history, and analysis
+  - secure-context app for Web Serial and Web Bluetooth-compatible device flows
 - `packages/core/`
   - shared TypeScript parsing, calibration, smoothing, segmentation, metrics, workouts, and session analysis
 - `firmware/`
-  - Arduino firmware for the current wired device
-- `app/`
-  - legacy code archive/reference during migration
+  - Arduino firmware for `CURRENT_UNO_HX711`
 
 ## Canonical Transport Contract
 
@@ -68,13 +53,13 @@ Install dependencies from the repo root:
 npm ci
 ```
 
-Run the active web app:
+Run the web app locally:
 
 ```bash
 npm run dev:web
 ```
 
-Build, lint, and test the web app:
+Build, lint, and test:
 
 ```bash
 npm run build:web
@@ -82,15 +67,18 @@ npm run lint:web
 npm run test:web
 ```
 
-If you are preparing a public-facing or hosted version, use `web/` as the source of truth. Do not build new product features into `app/`.
+## Hosted Deployment
 
-## Reference-Only Legacy App
+For a hosted deployment or custom domain:
 
-The Python desktop app is kept only for parity checks and historical reference. Most contributors and all end users can ignore it.
+1. Run `npm run build:web`.
+2. Publish the generated `web/dist/` output as a static site with SPA fallback to `index.html`.
+3. Use `https` on the final domain.
 
-Optional legacy verification:
+Important browser/runtime constraints:
 
-```bash
-cd app
-python -m pytest -q
-```
+- Web Serial requires a secure context and a Chromium-based browser.
+- Web Bluetooth device flows also require a secure context and supported browser/device combinations.
+- iOS Safari is not a full replacement for Chromium Web Serial workflows.
+
+If you are preparing a public-facing hosted version, `web/` is the only source of truth in this repository.
