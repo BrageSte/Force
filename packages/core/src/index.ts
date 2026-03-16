@@ -5,6 +5,7 @@ export * from './parsing.ts';
 export * from './smoothing.ts';
 export * from './segmentation.ts';
 export * from './metrics.ts';
+export * from './curveAnalysis.ts';
 export * from './sessionAnalyzer.ts';
 export * from './deviceCommands.ts';
 export * from './workouts.ts';

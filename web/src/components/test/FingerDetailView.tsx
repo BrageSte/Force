@@ -1,5 +1,11 @@
-import { useMemo, useState } from 'react';
-import { FINGER_COLORS, FINGER_NAMES } from '../../constants/fingers.ts';
+import { useEffect, useMemo, useState } from 'react';
+import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR } from '../../constants/fingers.ts';
+import { ResultCurveChart, type ResultCurveSeries } from '../analysis/ResultCurveChart.tsx';
+import {
+  buildAttemptCurveSummary,
+  defaultAttemptIndex,
+  defaultFingerIndex,
+} from '../analysis/forceCurveViewModel.ts';
 import type { CompletedTestResult } from './types.ts';
 
 interface FingerDetailViewProps {
@@ -7,168 +13,238 @@ interface FingerDetailViewProps {
   oppositeHandResult: CompletedTestResult | null;
 }
 
-function barHeight(value: number, max: number): number {
-  if (max <= 1e-9) return 0;
-  return (value / max) * 100;
-}
-
-function linePath(values: number[], width: number, height: number, max: number): string {
-  if (values.length === 0) return '';
-  return values
-    .map((v, i) => {
-      const x = values.length <= 1 ? 0 : (i / (values.length - 1)) * width;
-      const y = height - (Math.max(0, v) / Math.max(1e-9, max)) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
+function formatMs(value: number | null): string {
+  if (value === null || Number.isNaN(value)) return '--';
+  return `${value.toFixed(0)} ms`;
 }
 
 export function FingerDetailView({ result, oppositeHandResult }: FingerDetailViewProps) {
-  const [fingerIdx, setFingerIdx] = useState<number>(result.summary.strongestFinger);
   const attempts = result.attempts;
+  const [attemptIdx, setAttemptIdx] = useState(() => defaultAttemptIndex(result));
+  const [fingerIdx, setFingerIdx] = useState(() => defaultFingerIndex(result));
 
-  const peakHistory = useMemo(
-    () => attempts.map(a => a.core.peakPerFingerKg[fingerIdx]),
-    [attempts, fingerIdx],
-  );
-  const shareHistory = useMemo(
-    () => attempts.map(a => a.core.fingerShareAtPeakPct[fingerIdx]),
-    [attempts, fingerIdx],
-  );
-  const driftHistory = useMemo(
-    () => attempts.map(a => a.coaching.contributionDriftPct[fingerIdx]),
-    [attempts, fingerIdx],
-  );
-  const slopeHistory = useMemo(
-    () => attempts.map(a => a.coaching.fatigueSlopePerFingerKgS[fingerIdx]),
-    [attempts, fingerIdx],
+  useEffect(() => {
+    setAttemptIdx(defaultAttemptIndex(result));
+    setFingerIdx(defaultFingerIndex(result));
+  }, [result]);
+
+  const resolvedAttemptIdx = Math.max(0, Math.min(attemptIdx, Math.max(0, attempts.length - 1)));
+  const selectedAttempt = attempts[resolvedAttemptIdx] ?? null;
+  const summary = useMemo(
+    () => (selectedAttempt ? buildAttemptCurveSummary(selectedAttempt, fingerIdx) : null),
+    [fingerIdx, selectedAttempt],
   );
 
-  const bestAttemptIdx = result.summary.bestAttemptNo - 1;
-  const bestSamples = attempts[bestAttemptIdx]?.samples ?? [];
-  const traceKg = bestSamples.map(s => s.fingerKg[fingerIdx]);
-  const traceShare = bestSamples.map(s => s.fingerPct[fingerIdx]);
+  const forceSeries = useMemo<ResultCurveSeries[]>(() => {
+    if (!summary) return [];
+    return [
+      { label: 'Total', color: TOTAL_COLOR, values: summary.curve.totalKg, width: 2.6, opacity: 0.95 },
+      ...FINGER_NAMES.map((name, index) => ({
+        label: name,
+        color: FINGER_COLORS[index],
+        values: summary.curve.fingerKg[index],
+        width: index === fingerIdx ? 2.8 : 1.4,
+        opacity: index === fingerIdx ? 1 : 0.38,
+      })),
+    ];
+  }, [fingerIdx, summary]);
 
-  const oppPeak =
-    oppositeHandResult
-      ? Math.max(...oppositeHandResult.attempts.map(a => a.core.peakPerFingerKg[fingerIdx]))
+  const rateSeries = useMemo<ResultCurveSeries[]>(() => {
+    if (!summary) return [];
+    return [
+      { label: 'Total rate', color: TOTAL_COLOR, values: summary.curve.totalRateKgS, width: 2.4, opacity: 0.9 },
+      ...FINGER_NAMES.map((name, index) => ({
+        label: `${name} rate`,
+        color: FINGER_COLORS[index],
+        values: summary.curve.fingerRateKgS[index],
+        width: index === fingerIdx ? 2.6 : 1.3,
+        opacity: index === fingerIdx ? 1 : 0.34,
+      })),
+    ];
+  }, [fingerIdx, summary]);
+
+  const oppositeFingerPeak = oppositeHandResult
+    ? Math.max(...oppositeHandResult.attempts.map(attempt => attempt.core.peakPerFingerKg[fingerIdx]), 0)
+    : null;
+  const currentFingerPeak = selectedAttempt ? selectedAttempt.core.peakPerFingerKg[fingerIdx] : 0;
+  const oppositeDeltaPct =
+    oppositeFingerPeak && oppositeFingerPeak > 1e-9
+      ? ((currentFingerPeak - oppositeFingerPeak) / oppositeFingerPeak) * 100
       : null;
-  const thisPeak = Math.max(...peakHistory, 0);
-  const oppDeltaPct = oppPeak && oppPeak > 1e-9 ? ((thisPeak - oppPeak) / oppPeak) * 100 : null;
 
-  const maxPeak = Math.max(...peakHistory, 1);
-  const maxShare = Math.max(...shareHistory, 40);
-  const maxTrace = Math.max(...traceKg, 5);
-  const maxTraceShare = Math.max(...traceShare, 40);
+  if (!selectedAttempt || !summary || selectedAttempt.samples.length < 2) {
+    return (
+      <div className="bg-surface rounded-xl border border-border p-4 text-sm text-muted">
+        No detailed sample trace is available for this result yet.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <div className="text-sm font-semibold mb-2">Finger Detail</div>
-        <div className="flex flex-wrap gap-2">
-          {FINGER_NAMES.map((name, i) => (
-            <button
-              key={name}
-              onClick={() => setFingerIdx(i)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                i === fingerIdx
-                  ? 'border-transparent text-white'
-                  : 'border-border bg-surface-alt text-muted hover:text-text'
-              }`}
-              style={i === fingerIdx ? { backgroundColor: FINGER_COLORS[i] } : undefined}
-            >
-              {name}
-            </button>
-          ))}
+      <div className="bg-surface rounded-xl border border-border p-4 space-y-4">
+        <div>
+          <div className="text-sm font-semibold">Finger Force Curve Analysis</div>
+          <div className="text-xs text-muted mt-1">
+            Inspect one attempt at a time. The selected finger is emphasized in both the force and rate-of-force charts.
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-4">
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <div className="text-xs text-muted uppercase tracking-wide mb-2">Peak Force History</div>
-          <div className="flex items-end gap-2 h-40">
-            {peakHistory.map((v, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[11px] tabular-nums">{v.toFixed(1)}</span>
-                <div className="w-full bg-surface-alt rounded-t-md h-28 relative">
-                  <div
-                    className="absolute bottom-0 w-full rounded-t-md"
-                    style={{
-                      height: `${barHeight(v, maxPeak)}%`,
-                      backgroundColor: FINGER_COLORS[fingerIdx],
-                    }}
-                  />
-                </div>
-                <span className="text-[10px] text-muted">A{i + 1}</span>
-              </div>
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-wide text-muted">Attempt</div>
+          <div className="flex flex-wrap gap-2">
+            {attempts.map((attempt, index) => (
+              <button
+                key={`attempt-${attempt.attemptNo}`}
+                onClick={() => setAttemptIdx(index)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  index === resolvedAttemptIdx
+                    ? 'border-transparent bg-primary text-white'
+                    : 'border-border bg-surface-alt text-muted hover:text-text'
+                }`}
+              >
+                Attempt {attempt.attemptNo}
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <div className="text-xs text-muted uppercase tracking-wide mb-2">Share At Peak History</div>
-          <svg viewBox="0 0 500 160" className="w-full h-40 bg-bg rounded-lg border border-border">
-            <polyline
-              fill="none"
-              stroke={FINGER_COLORS[fingerIdx]}
-              strokeWidth="2.5"
-              points={linePath(shareHistory, 500, 160, maxShare)}
-            />
-          </svg>
-          <div className="text-xs text-muted mt-2">
-            Shows how this finger&apos;s peak contribution changes attempt to attempt.
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-wide text-muted">Finger</div>
+          <div className="flex flex-wrap gap-2">
+            {FINGER_NAMES.map((name, index) => (
+              <button
+                key={name}
+                onClick={() => setFingerIdx(index)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  index === fingerIdx
+                    ? 'border-transparent text-white'
+                    : 'border-border bg-surface-alt text-muted hover:text-text'
+                }`}
+                style={index === fingerIdx ? { backgroundColor: FINGER_COLORS[index] } : undefined}
+              >
+                {name}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-4">
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <div className="text-xs text-muted uppercase tracking-wide mb-2">Behavior In Best Attempt</div>
-          <svg viewBox="0 0 500 170" className="w-full h-44 bg-bg rounded-lg border border-border">
-            <polyline
-              fill="none"
-              stroke={FINGER_COLORS[fingerIdx]}
-              strokeWidth="2"
-              points={linePath(traceKg, 500, 170, maxTrace)}
-            />
-          </svg>
-          <svg viewBox="0 0 500 130" className="w-full h-32 bg-bg rounded-lg border border-border mt-2">
-            <polyline
-              fill="none"
-              stroke={FINGER_COLORS[fingerIdx]}
-              strokeWidth="2"
-              strokeDasharray="5 4"
-              points={linePath(traceShare, 500, 130, maxTraceShare)}
-            />
-          </svg>
-          <div className="text-xs text-muted mt-2">
-            Solid line: force. Dashed line: contribution share.
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section className="bg-surface rounded-xl border border-border p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-sm font-semibold">Force Over Time</div>
+              <div className="text-xs text-muted mt-1">
+                Attempt {selectedAttempt.attemptNo} · {selectedAttempt.durationS.toFixed(1)}s capture
+              </div>
+            </div>
+            <LegendPills fingerIdx={fingerIdx} />
           </div>
-        </div>
+          <div className="mt-4 rounded-lg border border-border bg-bg p-2">
+            <ResultCurveChart timesMs={summary.curve.timesMs} series={forceSeries} yLabel="kg" height={250} />
+          </div>
+        </section>
 
-        <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
-          <div className="text-xs text-muted uppercase tracking-wide">Interpretation</div>
-          <Metric label="Average Drift" value={`${(driftHistory.reduce((a, b) => a + b, 0) / Math.max(1, driftHistory.length)).toFixed(2)}%`} />
-          <Metric label="Average Fatigue Slope" value={`${(slopeHistory.reduce((a, b) => a + b, 0) / Math.max(1, slopeHistory.length)).toFixed(2)} kg/s`} />
-          <Metric
-            label="Opposite-Hand Same Finger"
-            value={oppPeak === null ? '--' : `${oppPeak.toFixed(1)} kg`}
-            note={oppDeltaPct === null ? 'Run same protocol on opposite hand for comparison.' : `${oppDeltaPct >= 0 ? '+' : ''}${oppDeltaPct.toFixed(1)}% vs opposite`}
-          />
-          <div className="text-xs text-muted pt-1 border-t border-border">
-            Use this view to spot whether this finger is improving, fading faster, or compensating for others.
+        <section className="bg-surface rounded-xl border border-border p-4">
+          <div className="text-sm font-semibold">Rate Of Force</div>
+          <div className="text-xs text-muted mt-1">
+            Derived from a lightly smoothed trace so the curve is readable even with sensor noise.
           </div>
-        </div>
+          <div className="mt-4 rounded-lg border border-border bg-bg p-2">
+            <ResultCurveChart timesMs={summary.curve.timesMs} series={rateSeries} yLabel="kg/s" height={250} zeroLine />
+          </div>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section className="bg-surface rounded-xl border border-border p-4">
+          <div className="text-sm font-semibold">Attempt Metrics</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+            <MetricCard label="Peak Total" value={`${summary.attemptMetrics.peakTotalKg.toFixed(1)} kg`} />
+            <MetricCard label="Mean Total" value={`${summary.attemptMetrics.meanTotalKg.toFixed(1)} kg`} />
+            <MetricCard label="Impulse" value={summary.attemptMetrics.impulseKgS.toFixed(1)} note="kg·s" />
+            <MetricCard label="Duration" value={`${summary.attemptMetrics.durationS.toFixed(1)} s`} />
+            <MetricCard label="RFD 0-100ms" value={summary.attemptMetrics.rfd100KgS.toFixed(1)} note="kg/s" />
+            <MetricCard label="RFD 0-200ms" value={summary.attemptMetrics.rfd200KgS.toFixed(1)} note="kg/s" />
+          </div>
+        </section>
+
+        <section className="bg-surface rounded-xl border border-border p-4">
+          <div className="text-sm font-semibold">{FINGER_NAMES[fingerIdx]} Metrics</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+            <MetricCard label="Peak" value={`${summary.fingerMetrics.peakKg.toFixed(1)} kg`} color={FINGER_COLORS[fingerIdx]} />
+            <MetricCard label="Mean" value={`${summary.fingerMetrics.meanKg.toFixed(1)} kg`} />
+            <MetricCard label="Share At Peak" value={`${summary.fingerMetrics.shareAtPeakPct.toFixed(1)}%`} />
+            <MetricCard label="Avg Share" value={`${summary.fingerMetrics.avgSharePct.toFixed(1)}%`} />
+            <MetricCard label="Time To Peak" value={formatMs(summary.fingerMetrics.timeToPeakMs)} />
+            <MetricCard label="RFD 0-100ms" value={summary.fingerMetrics.rfd100KgS.toFixed(1)} note="kg/s" />
+            <MetricCard label="RFD 0-200ms" value={summary.fingerMetrics.rfd200KgS.toFixed(1)} note="kg/s" />
+            <MetricCard label="Max Rise Rate" value={summary.fingerMetrics.maxRiseRateKgS.toFixed(1)} note="kg/s" />
+            <MetricCard label="Fatigue Slope" value={summary.fingerMetrics.fatigueSlopeKgS.toFixed(2)} note="kg/s" />
+            <MetricCard label="Max Share" value={`${summary.fingerMetrics.maxSharePct.toFixed(1)}%`} />
+          </div>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+        <MetricCard
+          label="Opposite-Hand Same Finger"
+          value={oppositeFingerPeak === null ? '--' : `${oppositeFingerPeak.toFixed(1)} kg`}
+          note={oppositeDeltaPct === null ? 'Run the same protocol on the opposite hand for comparison.' : `${oppositeDeltaPct >= 0 ? '+' : ''}${oppositeDeltaPct.toFixed(1)}% vs opposite`}
+        />
+        <MetricCard
+          label="Attempt Balance Score"
+          value={`${selectedAttempt.coaching.balanceScore.toFixed(0)}/100`}
+          note="Current attempt only"
+        />
+        <MetricCard
+          label="Selected Finger Drift"
+          value={`${selectedAttempt.coaching.contributionDriftPct[fingerIdx] >= 0 ? '+' : ''}${selectedAttempt.coaching.contributionDriftPct[fingerIdx].toFixed(1)}%`}
+          note="Late share minus early share"
+        />
       </div>
     </div>
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
+function LegendPills({ fingerIdx }: { fingerIdx: number }) {
   return (
-    <div className="bg-surface-alt rounded-lg border border-border p-3">
-      <div className="text-xs text-muted">{label}</div>
-      <div className="text-base font-semibold tabular-nums mt-0.5">{value}</div>
+    <div className="flex flex-wrap gap-2 text-[11px]">
+      <LegendPill label="Total" color={TOTAL_COLOR} active />
+      {FINGER_NAMES.map((label, index) => (
+        <LegendPill key={label} label={label} color={FINGER_COLORS[index]} active={index === fingerIdx} />
+      ))}
+    </div>
+  );
+}
+
+function LegendPill({ label, color, active }: { label: string; color: string; active?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-2 rounded-full border border-border px-2.5 py-1 ${active ? 'bg-surface text-text' : 'bg-surface-alt text-muted'}`}>
+      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color, opacity: active ? 1 : 0.45 }} />
+      {label}
+    </span>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  note,
+  color,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-surface-alt p-3">
+      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
+      <div className="text-lg font-semibold mt-2 tabular-nums" style={color ? { color } : undefined}>
+        {value}
+      </div>
       {note && <div className="text-xs text-muted mt-1">{note}</div>}
     </div>
   );
