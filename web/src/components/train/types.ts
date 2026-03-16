@@ -129,6 +129,8 @@ export interface TrainSummary {
 
 export interface TrainSessionResult {
   trainSessionId: string;
+  sessionId?: string;
+  completed?: boolean;
   workoutId: TrainWorkoutId;
   workoutKind: TrainWorkoutKind;
   profile: ProfileSnapshot | null;
@@ -166,6 +168,8 @@ export interface TrainSessionResult {
 
 export interface TrainSessionMeta {
   trainSessionId: string;
+  sessionId?: string;
+  completed?: boolean;
   startedAtIso: string;
   presetId: TrainWorkoutId;
   presetName: string;

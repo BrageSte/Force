@@ -603,6 +603,33 @@ export function GuidedTestScreen({
             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${phaseBadgeClass(phase)}`}>
               {phaseTitle(phase)}
             </span>
+            {(attemptsByHand[hand].length > 0 || attemptsByHand[secondaryHand].length > 0) && phase !== 'finished' && (
+              <button
+                onClick={() => {
+                  const results = buildCompletedResults({
+                    protocol,
+                    hand,
+                    secondaryHand,
+                    alternateHands,
+                    targetKg,
+                    oppositeHandBestPeakKg,
+                    profile,
+                    device,
+                    visibleLivePanels,
+                    attemptsByHand: attemptsByHandRef.current,
+                    startedAtIsoByHand: startedAtIsoRef.current,
+                    completed: false,
+                  });
+                  setPhase('finished');
+                  setPhaseDurationMs(0);
+                  setQueuedHand(null);
+                  onComplete(results);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/15 text-primary border border-primary/25 hover:bg-primary/20"
+              >
+                Save & Exit
+              </button>
+            )}
             <button
               onClick={onCancel}
               className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-alt border border-border text-muted hover:text-text"

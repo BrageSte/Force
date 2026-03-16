@@ -3,18 +3,20 @@ import { getDB } from '../../storage/db.ts';
 import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 
 function hydrateTrainingSession(payload: TrainSessionResult): TrainSessionResult {
-  if (payload.deviceType && payload.deviceName && payload.capabilities && payload.sampleSource) {
-    return payload;
-  }
+  const needsDeviceDefaults = !(payload.deviceType && payload.deviceName && payload.capabilities && payload.sampleSource);
+  const device = needsDeviceDefaults ? defaultConnectedDevice('Serial') : null;
 
-  const device = defaultConnectedDevice('Serial');
   return {
     ...payload,
-    deviceType: payload.deviceType ?? device.deviceType,
-    deviceName: payload.deviceName ?? device.deviceName,
-    capabilities: payload.capabilities ?? device.capabilities,
-    sampleSource: payload.sampleSource ?? device.sourceKind,
+    ...(device && {
+      deviceType: payload.deviceType ?? device.deviceType,
+      deviceName: payload.deviceName ?? device.deviceName,
+      capabilities: payload.capabilities ?? device.capabilities,
+      sampleSource: payload.sampleSource ?? device.sourceKind,
+    }),
     protocolVersion: payload.protocolVersion ?? 1,
+    sessionId: payload.sessionId,
+    completed: payload.completed,
   };
 }
 
@@ -34,6 +36,8 @@ export async function listTrainingSessions(): Promise<TrainSessionMeta[]> {
   return all
     .map(session => ({
       trainSessionId: session.trainSessionId,
+      sessionId: session.sessionId,
+      completed: session.completed,
       startedAtIso: session.startedAtIso,
       presetId: session.presetId,
       presetName: session.presetName,

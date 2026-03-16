@@ -218,7 +218,7 @@ export function GuidedTrainScreen({
     } satisfies TrainRepResult;
   }, [resolvedTargetKg, timeline]);
 
-  const finalizeSession = useCallback((reps: TrainRepResult[]) => {
+  const finalizeSession = useCallback((reps: TrainRepResult[], completed?: boolean) => {
     if (!startedAtIso) return;
     const result = buildTrainSessionResult({
       protocol,
@@ -236,6 +236,7 @@ export function GuidedTrainScreen({
       previousResult,
       recommendation,
       latestBenchmark,
+      completed,
     });
     setPhase('finished');
     setPhaseDurationMs(0);
@@ -304,8 +305,11 @@ export function GuidedTrainScreen({
       ? finalizeCurrentWorkStep(completedRepsRef.current)
       : completedRepsRef.current;
     if (nextReps.length === 0) return;
-    finalizeSession(nextReps);
-  }, [finalizeCurrentWorkStep, finalizeSession, startedAtIso]);
+    // Mark as incomplete if there are remaining timeline steps
+    const currentIdx = currentStepIndexRef.current;
+    const isIncomplete = currentIdx < timeline.length - 1;
+    finalizeSession(nextReps, isIncomplete ? false : undefined);
+  }, [finalizeCurrentWorkStep, finalizeSession, startedAtIso, timeline.length]);
 
   useEffect(() => {
     if (!['countdown', 'warmup', 'work', 'rest', 'set_rest', 'cooldown'].includes(phase) || phaseDurationMs <= 0) return;

@@ -17,6 +17,7 @@ interface BuildCompletedResultsArgs {
   visibleLivePanels: LivePanelId[];
   attemptsByHand: Record<Hand, AttemptSample[][]>;
   startedAtIsoByHand: Record<Hand, string>;
+  completed?: boolean;
 }
 
 export function buildCompletedResults({
@@ -31,9 +32,11 @@ export function buildCompletedResults({
   visibleLivePanels,
   attemptsByHand,
   startedAtIsoByHand,
+  completed,
 }: BuildCompletedResultsArgs): CompletedTestResult | CompletedTestResult[] {
   // Guided capture stores per-finger data in canonical anatomical order for both
   // hands, so result assembly must not re-map fingers here.
+  const sessionId = crypto.randomUUID();
   const primaryAttempts = attemptsByHand[hand];
   const secondaryAttempts = attemptsByHand[secondaryHand];
   const primaryOppositeBest = alternateHands
@@ -68,6 +71,9 @@ export function buildCompletedResults({
     },
   );
 
+  primaryResult.sessionId = sessionId;
+  if (completed !== undefined) primaryResult.completed = completed;
+
   if (!alternateHands || secondaryAttempts.length === 0) {
     return primaryResult;
   }
@@ -99,6 +105,9 @@ export function buildCompletedResults({
       ),
     },
   );
+
+  secondaryResult.sessionId = sessionId;
+  if (completed !== undefined) secondaryResult.completed = completed;
 
   return [primaryResult, secondaryResult];
 }

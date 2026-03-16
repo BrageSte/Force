@@ -341,11 +341,15 @@ export function buildTrainSessionResult(args: {
   recommendation?: TrainRecommendation | null;
   latestBenchmark?: CompletedTestResult | null;
   notes?: string;
+  sessionId?: string;
+  completed?: boolean;
 }): TrainSessionResult {
   const completedAtIso = new Date().toISOString();
   const summary = buildTrainSummary(args.protocol, args.reps, args.previousResult, args.targetKg);
   return {
     trainSessionId: `train_${new Date().toISOString().replace(/[:.]/g, '-')}`,
+    sessionId: args.sessionId,
+    completed: args.completed,
     workoutId: args.protocol.id,
     workoutKind: args.protocol.workoutKind,
     profile: args.profile,

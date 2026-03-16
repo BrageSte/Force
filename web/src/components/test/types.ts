@@ -297,6 +297,8 @@ export interface TestSummary {
 
 export interface CompletedTestResult {
   resultId: string;
+  sessionId?: string;
+  completed?: boolean;
   protocolKind: ProtocolKind;
   protocolId: string;
   protocolName: string;

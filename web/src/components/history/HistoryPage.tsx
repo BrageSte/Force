@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../stores/appStore.ts';
 import { exportSessionCsv } from '../../storage/sessionStore.ts';
 import { loadTestResults } from '../test/testStorage.ts';
-import { bestPeakOfResult } from '../test/testAnalysis.ts';
 import { listTrainingSessions } from '../train/trainStorage.ts';
 import { HistoryCompareWorkspace } from './HistoryCompareWorkspace.tsx';
 import { HistoryTestAnalysisWorkspace } from './HistoryTestAnalysisWorkspace.tsx';
+import { HistoryTestDetailView } from './HistoryTestDetailView.tsx';
+import { HistoryTrainDetailView } from './HistoryTrainDetailView.tsx';
+import { groupTestResultsBySession, groupTrainSessionsBySession } from './sessionGrouping.ts';
 import { NavButton } from '../shared/NavButton.tsx';
 import { EmptyState } from '../shared/EmptyState.tsx';
 import { formatDateTime } from '../shared/formatDateTime.ts';
@@ -18,7 +20,7 @@ interface HistoryPageProps {
 }
 
 type HistoryView = 'sessions' | 'tests' | 'training';
-type TestHistoryView = 'list' | 'compare' | 'analysis';
+type TestHistoryView = 'list' | 'compare' | 'analysis' | 'detail';
 
 export function HistoryPage({ onNavigate }: HistoryPageProps) {
   const sessions = useAppStore(s => s.sessions);
@@ -30,6 +32,8 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
   const [selectedTestResultId, setSelectedTestResultId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<CompletedTestResult[]>(() => loadTestResults());
   const [trainingSessions, setTrainingSessions] = useState<TrainSessionMeta[]>([]);
+  const [testDetailResults, setTestDetailResults] = useState<CompletedTestResult[] | null>(null);
+  const [trainDetailSessionIds, setTrainDetailSessionIds] = useState<string[] | null>(null);
 
   const filteredSessions = activeProfile
     ? sessions.filter(session => session.profileId === activeProfile.profileId)
@@ -40,6 +44,15 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
   const filteredTrainingSessions = activeProfile
     ? trainingSessions.filter(session => session.profileId === activeProfile.profileId)
     : trainingSessions;
+
+  const testSessionGroups = useMemo(
+    () => groupTestResultsBySession(filteredTestResults),
+    [filteredTestResults],
+  );
+  const trainSessionGroups = useMemo(
+    () => groupTrainSessionsBySession(filteredTrainingSessions),
+    [filteredTrainingSessions],
+  );
 
   useEffect(() => {
     const refresh = async () => {
@@ -59,6 +72,42 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
     const session = await useAppStore.getState().loadSession(id);
     if (session) exportSessionCsv(session);
   };
+
+  const handleTestGroupClick = (results: CompletedTestResult[]) => {
+    setTestDetailResults(results);
+    setTestView('detail');
+  };
+
+  const handleTrainGroupClick = (sessionIds: string[]) => {
+    setTrainDetailSessionIds(sessionIds);
+  };
+
+  // Test detail view
+  if (view === 'tests' && testView === 'detail' && testDetailResults) {
+    return (
+      <div className="h-full flex flex-col gap-4 overflow-auto">
+        <HistoryTestDetailView
+          results={testDetailResults}
+          onBack={() => {
+            setTestDetailResults(null);
+            setTestView('list');
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Train detail view
+  if (view === 'training' && trainDetailSessionIds) {
+    return (
+      <div className="h-full flex flex-col gap-4 overflow-auto">
+        <HistoryTrainDetailView
+          trainSessionIds={trainDetailSessionIds}
+          onBack={() => setTrainDetailSessionIds(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col gap-4 overflow-auto">
@@ -134,7 +183,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
 
       {view === 'tests' && (
         <div className="space-y-3">
-        <div className="bg-surface rounded-xl border border-border p-2 flex gap-2 flex-wrap">
+          <div className="bg-surface rounded-xl border border-border p-2 flex gap-2 flex-wrap">
             <NavButton active={testView === 'list'} onClick={() => setTestView('list')} label="List" />
             <NavButton active={testView === 'compare'} onClick={() => setTestView('compare')} label="Compare" />
             <NavButton active={testView === 'analysis'} onClick={() => setTestView('analysis')} label="Analysis" />
@@ -148,7 +197,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
               selectedResultId={selectedTestResultId}
               onSelectResult={setSelectedTestResultId}
             />
-          ) : filteredTestResults.length === 0 ? (
+          ) : testSessionGroups.length === 0 ? (
             <EmptyState message="No test results for this profile yet." />
           ) : (
             <div className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -158,29 +207,27 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
                     <th className="px-4 py-2.5 text-left">Date</th>
                     <th className="px-4 py-2.5 text-left">Protocol</th>
                     <th className="px-4 py-2.5 text-left">Hand</th>
-                    <th className="px-4 py-2.5 text-right">Target</th>
                     <th className="px-4 py-2.5 text-right">Peak</th>
-                    <th className="px-4 py-2.5 text-right">Actions</th>
+                    <th className="px-4 py-2.5 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTestResults.map(result => (
-                    <tr key={result.resultId} className="border-t border-border hover:bg-surface-alt transition-colors">
-                      <td className="px-4 py-2.5 text-muted">{formatDateTime(result.completedAtIso)}</td>
-                      <td className="px-4 py-2.5">{result.protocolName}</td>
-                      <td className="px-4 py-2.5 text-muted">{result.hand}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{result.targetKg ? `${result.targetKg.toFixed(1)} kg` : 'n/a'}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{bestPeakOfResult(result).toFixed(1)} kg</td>
+                  {testSessionGroups.map(group => (
+                    <tr
+                      key={group.sessionId}
+                      onClick={() => handleTestGroupClick(group.results)}
+                      className="border-t border-border hover:bg-surface-alt transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-2.5 text-muted">{formatDateTime(group.startedAtIso)}</td>
+                      <td className="px-4 py-2.5">{group.protocolName}</td>
+                      <td className="px-4 py-2.5 text-muted">{group.hands}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{group.bestPeak.toFixed(1)} kg</td>
                       <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() => {
-                            setSelectedTestResultId(result.resultId);
-                            setTestView('analysis');
-                          }}
-                          className="px-2 py-1 rounded-lg text-xs font-medium bg-primary/15 text-primary hover:bg-primary/20 transition-colors"
-                        >
-                          Analyze
-                        </button>
+                        {!group.completed && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning/10 text-warning border border-warning/30">
+                            Incomplete
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -191,7 +238,7 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
         </div>
       )}
 
-      {view === 'training' && (filteredTrainingSessions.length === 0 ? (
+      {view === 'training' && (trainSessionGroups.length === 0 ? (
         <EmptyState message="No guided training sessions for this profile yet." />
       ) : (
         <div className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -201,24 +248,32 @@ export function HistoryPage({ onNavigate }: HistoryPageProps) {
                 <th className="px-4 py-2.5 text-left">Date</th>
                 <th className="px-4 py-2.5 text-left">Preset</th>
                 <th className="px-4 py-2.5 text-left">Hand</th>
-                <th className="px-4 py-2.5 text-right">Target</th>
                 <th className="px-4 py-2.5 text-right">Completion</th>
                 <th className="px-4 py-2.5 text-right">TUT</th>
                 <th className="px-4 py-2.5 text-right">Best</th>
-                <th className="px-4 py-2.5 text-right">Avg</th>
+                <th className="px-4 py-2.5 text-right">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filteredTrainingSessions.map(session => (
-                <tr key={session.trainSessionId} className="border-t border-border hover:bg-surface-alt transition-colors">
-                  <td className="px-4 py-2.5 text-muted">{formatDateTime(session.startedAtIso)}</td>
-                  <td className="px-4 py-2.5">{session.presetName}</td>
-                  <td className="px-4 py-2.5 text-muted">{session.hand}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{session.targetKg.toFixed(1)} kg</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{session.completionPct.toFixed(0)}%</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{session.totalTutS.toFixed(0)}s</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{session.peakTotalKg.toFixed(1)} kg</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{session.avgHoldKg.toFixed(1)} kg</td>
+              {trainSessionGroups.map(group => (
+                <tr
+                  key={group.sessionId}
+                  onClick={() => handleTrainGroupClick(group.sessions.map(s => s.trainSessionId))}
+                  className="border-t border-border hover:bg-surface-alt transition-colors cursor-pointer"
+                >
+                  <td className="px-4 py-2.5 text-muted">{formatDateTime(group.startedAtIso)}</td>
+                  <td className="px-4 py-2.5">{group.presetName}</td>
+                  <td className="px-4 py-2.5 text-muted">{group.hands}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{group.completionPct.toFixed(0)}%</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{group.totalTutS.toFixed(0)}s</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{group.bestPeak.toFixed(1)} kg</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {!group.completed && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning/10 text-warning border border-warning/30">
+                        Incomplete
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

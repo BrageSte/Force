@@ -101,6 +101,8 @@ function hydrateResult(raw: unknown): CompletedTestResult | null {
 
   return {
     resultId: source.resultId,
+    sessionId: typeof source.sessionId === 'string' ? source.sessionId : undefined,
+    completed: typeof source.completed === 'boolean' ? source.completed : undefined,
     protocolKind,
     protocolId,
     protocolName: source.protocolName ?? protocol.name,

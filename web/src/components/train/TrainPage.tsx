@@ -39,6 +39,7 @@ import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 type TrainPageView = 'library' | 'guided' | 'results';
 
 interface ActiveRunConfig {
+  sessionId: string;
   hand: 'Left' | 'Right';
   workoutId: TrainWorkoutId;
   workoutKind: TrainWorkoutKind;
@@ -165,6 +166,7 @@ export function TrainPage() {
       return;
     }
     setActiveRun({
+      sessionId: crypto.randomUUID(),
       hand,
       workoutId: selectedWorkout.id,
       workoutKind: selectedWorkout.workoutKind,
@@ -188,6 +190,7 @@ export function TrainPage() {
   };
 
   const handleComplete = async (result: TrainSessionResult) => {
+    result.sessionId = activeRun?.sessionId;
     await saveTrainingSession(result);
     const refreshedResults = await listTrainingSessionResults();
     setTrainingResults(refreshedResults);
@@ -461,6 +464,7 @@ export function TrainPage() {
               return;
             }
             setActiveRun({
+              sessionId: crypto.randomUUID(),
               hand,
               workoutId: saved.id,
               workoutKind: 'custom',
