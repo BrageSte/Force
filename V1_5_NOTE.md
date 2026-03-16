@@ -1,21 +1,22 @@
-# V1.5 Experimental Fork
+# V1.5 Web-First Transition Snapshot
 
-This folder is the active experimental fork for the benchmark, prescription, and train-runner refactor.
+This repository is the active v1.5 working tree for the web-first product transition.
 
 Intent:
 
-- preserve the original repo at `/Users/brage/Documents/Krimblokk_4 fingre` as the frozen baseline
-- run all benchmark/workout-engine work only inside this snapshot
-- keep `TEST` as the benchmark surface
-- grow `TRAIN` into the prescription and guided-workout surface
+- make `web/` the only active operator surface
+- keep benchmark, prescription, and train-runner work inside the TypeScript/web stack
+- preserve `app/` only as a legacy analytics reference until parity is fully covered by `web/` and `packages/core`
+- prepare the project for a shareable web application now and a BLE-connected mobile app later
 
-Snapshot rules:
+Working rules for this version:
 
-- `.git` is intentionally not copied into this folder
-- runtime artifacts such as `node_modules`, virtualenvs, and build outputs were excluded from the snapshot
-- any new benchmark, train UI, custom workout, or recommendation work belongs here first
+- run, demo, and validate from `web/`
+- keep shared parsing, calibration, metrics, and workout logic in `packages/core`
+- do not add new product-facing features to `app/`
+- remove local runtime artifacts before committing so the repo stays clean for GitHub and future productization
 
-Read order for work in this fork:
+Read order for work in this repository:
 
 1. [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)
 2. [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md)

@@ -1,24 +1,26 @@
 # Krimblokk v1.5
 
-Read [V1_5_NOTE.md](V1_5_NOTE.md) first for the purpose of this snapshot fork. Then read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). It is the authoritative project entrypoint for purpose, current hardware, target hardware, and transport rules. For architecture, migration, and roadmap decisions, also read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). For the workout engine and benchmark model, read [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md). For training session design and source basis, read [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md).
+Krimblokk is a four-channel finger-force measurement system for structured testing, live capture, and session review. In this repository, `web/` is the active product surface and the only UI that should be used for normal operation.
 
-## Current vs Future
+Read [V1_5_NOTE.md](V1_5_NOTE.md) for the purpose of this version, then [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture, migration, and roadmap decisions, also read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training logic are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md).
 
-Current physical/software baseline:
+## Product Direction
+
+Current baseline:
 
 - hardware profile `CURRENT_UNO_HX711`
-- Arduino UNO + 4 x HX711 + 4 x strain/load cell
+- Arduino UNO + 4 x HX711 + 4 x load cell channels
 - wired serial transport
-- `web/` is the active UI baseline
+- `web/` as the active browser UI
 
-Future target:
+Target direction:
 
 - hardware profile `TARGET_XIAO_BLE_HX711`
-- Seeed XIAO BLE nRF52840 + 4 x HX711 + 4 x load cell + LiPo + switch
-- BLE-capable mobile-first control surface later
-- optional web service later
+- compact XIAO BLE based device
+- BLE-connected mobile app later
+- optional web service or hosted workflows later
 
-This snapshot is intentionally experimental. The original repo remains the frozen baseline, while this `v1.5` folder carries the benchmark/workout-engine fork.
+`app/` remains in the repository only as a legacy Python reference while logic is consolidated in TypeScript. It is not the product surface to run, package, or share with users.
 
 ## Repository Layout
 
@@ -34,25 +36,20 @@ web/
   src/
 
 app/
-  acquisition/
-  analytics/
-  calibration/
-  persistence/
-  tests/
-  ui/
+  ... legacy Python reference only
 ```
 
-## Surfaces
+## Active Surfaces
 
 - `web/`
-  - primary direction
-  - browser UI with Web Serial today
+  - current product UI
+  - browser app with Web Serial against `CURRENT_UNO_HX711`
 - `packages/core/`
-  - shared TypeScript parsing, calibration, smoothing, segmentation, metrics, session analysis, and device command contract
-- `app/`
-  - legacy Python desktop reference/fallback
+  - shared TypeScript parsing, calibration, smoothing, segmentation, metrics, workouts, and session analysis
 - `firmware/`
-  - current Arduino firmware
+  - Arduino firmware for the current wired device
+- `app/`
+  - legacy code archive/reference during migration
 
 ## Canonical Transport Contract
 
@@ -63,36 +60,35 @@ app/
 - one active stream mode per connection: `raw` or `kg`
 - status/debug lines start with `#`
 
-## Run Web
+## Quick Start
 
-Start `v1.5` web-appen:
+Install dependencies from the repo root:
 
 ```bash
-cd "/Users/brage/Documents/Krimblokk_4 fingre v1.5/web"
 npm ci
-npm run dev
 ```
 
-## Run Legacy Desktop App
+Run the active web app:
 
 ```bash
-cd app
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-./run_app.sh
+npm run dev:web
 ```
 
-## Tests
-
-Web:
+Build, lint, and test the web app:
 
 ```bash
-cd web
-npm test
+npm run build:web
+npm run lint:web
+npm run test:web
 ```
 
-Python reference app:
+If you are preparing a public-facing or hosted version, use `web/` as the source of truth. Do not build new product features into `app/`.
+
+## Reference-Only Legacy App
+
+The Python desktop app is kept only for parity checks and historical reference. Most contributors and all end users can ignore it.
+
+Optional legacy verification:
 
 ```bash
 cd app

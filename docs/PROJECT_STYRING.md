@@ -7,10 +7,11 @@ Denne fasen etablerer en web-first baseline som kan brukes trygt pa dagens Ardui
 I scope:
 
 - beholde eksisterende `web/` UI-struktur
+- rydde repoet for lokale runtime-artefakter og utdaterte innganger
 - rydde transport- og kalibreringskontrakter
 - flytte delt domenelogikk til `packages/core`
 - dokumentere dagens og fremtidig hardware/software tydelig
-- beholde `app/` som fallback/reference
+- beholde `app/` som legacy/reference uten aktiv bruk
 
 Utenfor scope i denne fasen:
 
@@ -49,8 +50,9 @@ Aktive flater:
 Referanseflater:
 
 - `app/`
-  - Python desktop fallback
-  - brukes som referanse for metrics/paritet til web/core overtar fullt
+  - Python desktop legacy-reference
+  - brukes som kode- og parityreferanse til web/core overtar fullt
+  - skal ikke brukes som aktiv produktflate
 
 ## Maalarkitektur
 
@@ -89,6 +91,16 @@ Planlagt softwarearkitektur:
   - Status: aktiv
   - Dato: 2026-03-11
   - Begrunnelse: Python-koden inneholder eksisterende analysemassasje og er nyttig som referanse under migrering.
+
+- `app/` skal ikke brukes som aktiv operativ flate lenger.
+  - Status: aktiv
+  - Dato: 2026-03-15
+  - Begrunnelse: produktretningen er web na, mens framtidig sluttflate er BLE-tilkoblet mobilapp.
+
+- Repoet skal holdes fritt for lokale runtime-artefakter og byggeoutput.
+  - Status: aktiv
+  - Dato: 2026-03-15
+  - Begrunnelse: GitHub- og produktklar repo-struktur er viktig nar `web/` er den delbare hovedflaten.
 
 - Shared domain logic skal ligge i `packages/core`.
   - Status: aktiv
@@ -143,6 +155,7 @@ Fasen er godkjent nar:
 
 - `web/` fungerer fortsatt mot dagens `CURRENT_UNO_HX711`-oppsett.
 - Hovedsider og navigasjon i web er ikke redesignet.
+- README og styringsdokumenter peker nye brukere til `web/`, ikke `app/`.
 - Domenelogikk for parsing, kalibrering, smoothing, segmentering, metrics og session analysis er flyttet til `packages/core`.
 - Repoet har `AGENTS.md`, `PROJECT_CONTEXT.md` og dette styringsdokumentet pa plass.
 - Web har automatiske tester for parser, settings-normalisering, raw/kg-modus og lagring.
@@ -170,3 +183,4 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 - 2026-03-11: Opprettet formell styringsbaseline for web-first migrering.
 - 2026-03-11: Formaliserte hardwareprofilene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
 - 2026-03-11: Fastla at `app/` beholdes som referanse/legacy mens `web/` og `packages/core` tar over som hovedretning.
+- 2026-03-15: Ryddet repoet for lokale runtime-artefakter og tydeliggjorde `web/` som eneste aktive produktflate.

@@ -1,6 +1,6 @@
-# FingerForce Web App
+# Krimblokk Web
 
-React + TypeScript + Vite rebuild of the desktop `app/` for browser-based live acquisition and analysis.
+Primary product surface for Krimblokk. This is the browser application that runs against the current `CURRENT_UNO_HX711` hardware profile over Web Serial.
 
 ## Stack
 
@@ -13,9 +13,17 @@ React + TypeScript + Vite rebuild of the desktop `app/` for browser-based live a
 
 ## Run
 
+From the repository root:
+
+```bash
+npm ci
+npm run dev:web
+```
+
+Or from inside `web/`:
+
 ```bash
 cd web
-npm ci
 npm run dev
 ```
 
@@ -47,4 +55,5 @@ npm run build
 ## Notes
 
 - Web Serial requires a Chromium browser and secure context (`https` or `localhost`).
-- The original Python app remains unchanged in `app/`.
+- All new user-facing product work should happen here or in `packages/core/`.
+- The Python app in `app/` is legacy reference code only and should not be used as the active UI.

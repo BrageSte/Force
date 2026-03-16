@@ -1,16 +1,27 @@
-# Python
+# Node / web
+node_modules/
+web/node_modules/
+web/dist/
+web/coverage/
+*.tsbuildinfo
+
+# Python reference app
 .venv/
+app/.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
+app/.pytest_cache/
 app/logs/
 app/data/
 
 # Arduino / build
 build/
-node_modules/
+
+# Local tooling
+.claude/settings.local.json
 
 # macOS
 .DS_Store
