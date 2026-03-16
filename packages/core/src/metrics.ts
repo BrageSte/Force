@@ -64,6 +64,34 @@ function mean(values: number[]): number {
   return total / values.length;
 }
 
+export function computeContributionDriftPctFromFingerPctSeries(fingerPctSeries: Finger4[]): Finger4 {
+  if (fingerPctSeries.length === 0) return [0, 0, 0, 0];
+
+  const q = Math.max(1, Math.floor(fingerPctSeries.length * 0.3));
+  const early = fingerPctSeries.slice(0, q);
+  const late = fingerPctSeries.slice(-q);
+
+  const earlyShares: Finger4 = [
+    mean(early.map(row => row[0])),
+    mean(early.map(row => row[1])),
+    mean(early.map(row => row[2])),
+    mean(early.map(row => row[3])),
+  ];
+  const lateShares: Finger4 = [
+    mean(late.map(row => row[0])),
+    mean(late.map(row => row[1])),
+    mean(late.map(row => row[2])),
+    mean(late.map(row => row[3])),
+  ];
+
+  return [
+    lateShares[0] - earlyShares[0],
+    lateShares[1] - earlyShares[1],
+    lateShares[2] - earlyShares[2],
+    lateShares[3] - earlyShares[3],
+  ];
+}
+
 function stddev(values: number[]): number {
   if (values.length < 2) return 0;
   const m = mean(values);

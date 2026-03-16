@@ -4,7 +4,44 @@ import { useLiveStore } from '../../stores/liveStore.ts';
 import { FINGER_NAMES, FINGER_COLORS, TOTAL_COLOR } from '../../constants/fingers.ts';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
 
-export function ForceChart() {
+const EMPTY_DATA: uPlot.AlignedData = [
+  new Float64Array(0),
+  new Float64Array(0),
+  new Float64Array(0),
+  new Float64Array(0),
+  new Float64Array(0),
+  new Float64Array(0),
+];
+
+interface ForceChartProps {
+  variant?: 'balanced' | 'total_focus' | 'per_finger_focus';
+}
+
+function fingerSeriesStyle(index: number, variant: ForceChartProps['variant']) {
+  if (variant === 'total_focus') {
+    return {
+      label: FINGER_NAMES[index],
+      stroke: `${FINGER_COLORS[index]}55`,
+      width: 1,
+    };
+  }
+
+  if (variant === 'per_finger_focus') {
+    return {
+      label: FINGER_NAMES[index],
+      stroke: FINGER_COLORS[index],
+      width: 2,
+    };
+  }
+
+  return {
+    label: FINGER_NAMES[index],
+    stroke: FINGER_COLORS[index],
+    width: 1.5,
+  };
+}
+
+export function ForceChart({ variant = 'balanced' }: ForceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const lastRenderedPos = useRef(0);
@@ -42,16 +79,15 @@ export function ForceChart() {
       ],
       series: [
         {},
-        { label: 'Total', stroke: TOTAL_COLOR, width: 2.5 },
-        { label: FINGER_NAMES[0], stroke: FINGER_COLORS[0], width: 1.5 },
-        { label: FINGER_NAMES[1], stroke: FINGER_COLORS[1], width: 1.5 },
-        { label: FINGER_NAMES[2], stroke: FINGER_COLORS[2], width: 1.5 },
-        { label: FINGER_NAMES[3], stroke: FINGER_COLORS[3], width: 1.5 },
+        { label: 'Total', stroke: TOTAL_COLOR, width: variant === 'per_finger_focus' ? 2 : 3 },
+        fingerSeriesStyle(0, variant),
+        fingerSeriesStyle(1, variant),
+        fingerSeriesStyle(2, variant),
+        fingerSeriesStyle(3, variant),
       ],
     };
 
-    const emptyData: uPlot.AlignedData = [new Float64Array(0), new Float64Array(0), new Float64Array(0), new Float64Array(0), new Float64Array(0), new Float64Array(0)];
-    const plot = new uPlot(opts, emptyData, el);
+    const plot = new uPlot(opts, EMPTY_DATA, el);
     plotRef.current = plot;
 
     const resizeObs = new ResizeObserver(entries => {
@@ -65,7 +101,7 @@ export function ForceChart() {
       plot.destroy();
       plotRef.current = null;
     };
-  }, []);
+  }, [variant]);
 
   // RAF-synced data push
   useAnimationFrame(() => {
@@ -77,7 +113,10 @@ export function ForceChart() {
     lastRenderedPos.current = state.writePos;
 
     const len = state.bufferLength;
-    if (len === 0) return;
+    if (len === 0) {
+      plot.setData(EMPTY_DATA, true);
+      return;
+    }
 
     // Build sub-arrays from ring buffer
     const wp = state.writePos;
@@ -116,11 +155,10 @@ export function ForceChart() {
       }
     }
 
-    plot.setData([times, total, fingers[0], fingers[1], fingers[2], fingers[3]], false);
-    plot.redraw();
+    plot.setData([times, total, fingers[0], fingers[1], fingers[2], fingers[3]], true);
   });
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-[300px]" />
+    <div ref={containerRef} className="w-full h-[220px] sm:h-[240px] xl:h-[260px]" />
   );
 }

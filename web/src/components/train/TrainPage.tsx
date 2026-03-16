@@ -8,6 +8,7 @@ import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { toProfileSnapshot } from '../../types/profile.ts';
 import { capabilityBlockReason, deviceCapabilitiesForSourceKind } from '../../device/capabilityChecks.ts';
+import { resolveSimulatorAthleteContext } from '../../device/simulatorAthlete.ts';
 import { loadTestResults } from '../test/testStorage.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import { AiTrainBuilderModal } from './AiTrainBuilderModal.tsx';
@@ -33,6 +34,7 @@ import type {
   TrainWorkoutId,
   TrainWorkoutKind,
 } from './types.ts';
+import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 
 type TrainPageView = 'library' | 'guided' | 'results';
 
@@ -49,6 +51,7 @@ interface ActiveRunConfig {
   benchmarkSourceId?: string;
   benchmarkSourceLabel?: string;
   benchmarkReference: BenchmarkReferenceResolution | null;
+  simulatorProfiles: Record<'Left' | 'Right', SimulatorAthleteProfile>;
   profileSnapshot: ReturnType<typeof toProfileSnapshot> | null;
   previousResult: TrainSessionResult | null;
   recommendation: TrainRecommendation | null;
@@ -151,6 +154,10 @@ export function TrainPage() {
     () => capabilityBlockReason(selectedWorkout.capabilityRequirements, selectedDeviceCapabilities),
     [selectedDeviceCapabilities, selectedWorkout.capabilityRequirements],
   );
+  const simulatorProfiles = useMemo(() => ({
+    Left: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileTests, hand: 'Left' }),
+    Right: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileTests, hand: 'Right' }),
+  }), [activeProfile, profileTests]);
 
   const handleStart = (config: Pick<ActiveRunConfig, 'targetMode' | 'targetKg' | 'sourceMaxKg' | 'bodyweightRelativeTarget' | 'benchmarkSourceId' | 'benchmarkSourceLabel' | 'benchmarkReference'>) => {
     if (workoutStartBlockReason) {
@@ -170,6 +177,7 @@ export function TrainPage() {
       benchmarkSourceId: config.benchmarkSourceId,
       benchmarkSourceLabel: config.benchmarkSourceLabel,
       benchmarkReference: config.benchmarkReference,
+      simulatorProfiles,
       profileSnapshot: activeProfile ? toProfileSnapshot(activeProfile) : null,
       previousResult: previousMatchingResult,
       recommendation: selectedRecommendation,
@@ -217,6 +225,10 @@ export function TrainPage() {
         benchmarkSourceId: nextResolution.benchmarkSourceId,
         benchmarkSourceLabel: nextResolution.benchmarkSourceLabel,
         benchmarkReference: nextResolution.benchmarkReference,
+        simulatorProfiles: {
+          Left: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileTests, hand: 'Left' }),
+          Right: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileTests, hand: 'Right' }),
+        },
         previousResult: nextPrevious,
         latestBenchmark: nextBenchmark,
       });
@@ -246,6 +258,7 @@ export function TrainPage() {
 
     return (
       <GuidedTrainScreen
+        key={`${activeRun.workoutKind}:${activeRun.workoutId}:${activeRun.hand}`}
         protocol={runtimeWorkout}
         hand={activeRun.hand}
         profile={activeRun.profileSnapshot}
@@ -256,6 +269,7 @@ export function TrainPage() {
         benchmarkSourceId={activeRun.benchmarkSourceId}
         benchmarkSourceLabel={activeRun.benchmarkSourceLabel}
         benchmarkReference={activeRun.benchmarkReference}
+        simulatorProfiles={activeRun.simulatorProfiles}
         previousResult={activeRun.previousResult}
         recommendation={activeRun.recommendation}
         latestBenchmark={activeRun.latestBenchmark}
@@ -459,6 +473,7 @@ export function TrainPage() {
               benchmarkSourceId: resolution.benchmarkSourceId,
               benchmarkSourceLabel: resolution.benchmarkSourceLabel,
               benchmarkReference: resolution.benchmarkReference,
+              simulatorProfiles,
               profileSnapshot: activeProfile ? toProfileSnapshot(activeProfile) : null,
               previousResult: previous,
               recommendation: null,

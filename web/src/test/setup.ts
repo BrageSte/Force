@@ -37,6 +37,11 @@ Object.defineProperty(globalThis, 'sessionStorage', {
   configurable: true,
 })
 
+Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
+  value: true,
+  configurable: true,
+})
+
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()

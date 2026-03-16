@@ -3,21 +3,28 @@ import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import { FINGER_NAMES, FINGER_COLORS, displayOrder } from '../../constants/fingers.ts';
+import { getQuickMeasureDefinition, quickMeasureBlockReason } from '../../live/quickMeasure.ts';
 
 export function DistributionChart() {
   const latestPct = useLiveStore(s => s.latestPct);
   const hasMeaningfulLoad = useLiveStore(s => s.hasMeaningfulLoad);
+  const quickMeasurePresetId = useLiveStore(s => s.quickMeasurePresetId);
   const hand = useAppStore(s => s.hand);
-  const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
+  const sourceKind = useDeviceStore(s => s.sourceKind);
+  const activeDevice = useDeviceStore(s => s.activeDevice);
+  const device = activeDevice ?? defaultConnectedDevice(sourceKind);
+  const perFingerForce = device.capabilities.perFingerForce;
   const order = displayOrder(hand);
   const maxPct = Math.max(50, ...(latestPct ?? [0, 0, 0, 0]));
+  const activePreset = getQuickMeasureDefinition(quickMeasurePresetId);
+  const presetBlockReason = quickMeasureBlockReason(activePreset, device.capabilities);
 
   if (!perFingerForce) {
     return (
       <div className="bg-surface rounded-xl border border-border p-4 h-full">
         <div className="text-xs text-muted font-medium uppercase tracking-wide mb-3">Distribution</div>
         <div className="rounded-lg border border-border bg-surface-alt px-3 py-4 text-sm text-muted">
-          This device provides total force only, so finger distribution is unavailable.
+          {presetBlockReason ?? 'This device provides total force only, so finger distribution is unavailable.'}
         </div>
       </div>
     );

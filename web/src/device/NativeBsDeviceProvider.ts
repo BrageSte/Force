@@ -1,6 +1,7 @@
 import type { DeviceCommand, InputMode, SourceKind } from '@krimblokk/core';
 import { serializeDeviceCommand, streamModeForInputMode } from '@krimblokk/core';
 import { SimulatedSource } from './SimulatedSource.ts';
+import type { RestoreSimulatorArgs, SimulatorRuntimeState } from './simulatorTypes.ts';
 import { WebSerialSource } from './WebSerialSource.ts';
 import { defaultConnectedDevice } from './deviceProfiles.ts';
 import type { ConnectedDeviceInfo } from '../types/force.ts';
@@ -40,7 +41,7 @@ export class NativeBsDeviceProvider implements DeviceProvider {
     }];
   }
 
-  async connect(_target?: DeviceScanResult): Promise<void> {
+  async connect(): Promise<void> {
     this.emitState('connecting', null);
 
     const source = this.sourceKind === 'Simulator'
@@ -114,6 +115,14 @@ export class NativeBsDeviceProvider implements DeviceProvider {
     this.inputMode = inputMode;
     if (!this.source?.setStreamMode) return;
     this.source.setStreamMode(streamModeForInputMode(inputMode));
+  }
+
+  async setSimulatorState(state: SimulatorRuntimeState): Promise<void> {
+    this.source?.setSimulatorState?.(state);
+  }
+
+  async restoreDefaultSimulatorState(args?: RestoreSimulatorArgs): Promise<void> {
+    this.source?.restoreDefaultSimulatorState?.(args);
   }
 
   isConnected(): boolean {

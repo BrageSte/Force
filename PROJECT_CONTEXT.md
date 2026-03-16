@@ -13,6 +13,7 @@ The current usable and shippable operator surface is the `web/` application. Pro
 The product exists to measure finger force in a structured way, not just to show live numbers. It is intended to:
 
 - capture force from four fingers at the same time
+- support quick live checks and short local measurements in `LIVE`
 - support repeatable test protocols
 - analyze peak force, rate of force development, load distribution, drift, steadiness, and fatigue
 - retain session data for comparison over time
@@ -48,6 +49,8 @@ Current firmware assumptions:
 - `web/`
   - active UI baseline and primary direction
   - runs in browser with Web Serial today
+  - `LIVE` is the quick-check surface for local monitoring and short captures
+  - `TEST` is the formal benchmark and serious tracking surface
   - supports hosted deployment as a secure-context web app
 - `packages/core/`
   - shared TypeScript domain logic for parsing, calibration, smoothing, segmentation, metrics, and session analysis

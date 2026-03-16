@@ -11,11 +11,18 @@ import { OnlineEffortDetector } from '../analytics/segmentation.ts';
 import { analyzeEffortSamples } from '../analytics/metrics.ts';
 import { rawToKg } from '../calibration/CalibrationProfile.ts';
 import { remapMeasurementToCanonicalFingers } from '../constants/fingers.ts';
+import {
+  buildQuickMeasureResult,
+  formatQuickCompletionReason,
+  getQuickMeasureDefinition,
+  type QuickCaptureCompletionReason,
+} from '../live/quickMeasure.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
 import { useAppStore } from '../stores/appStore.ts';
 import { isLikelyRawCounts, KG_TO_N, streamModeForInputMode, type InputMode } from '@krimblokk/core';
 import { defaultConnectedDevice } from '../device/deviceProfiles.ts';
+import type { RestoreSimulatorArgs, SimulatorRuntimeState } from '../device/simulatorTypes.ts';
 
 class InlineNativeSourceProvider implements DeviceProvider {
   readonly displayName: string;
@@ -79,6 +86,14 @@ class InlineNativeSourceProvider implements DeviceProvider {
 
   async setInputMode(inputMode: InputMode): Promise<void> {
     this.source.setStreamMode?.(streamModeForInputMode(inputMode));
+  }
+
+  async setSimulatorState(state: SimulatorRuntimeState): Promise<void> {
+    this.source.setSimulatorState?.(state);
+  }
+
+  async restoreDefaultSimulatorState(args?: RestoreSimulatorArgs): Promise<void> {
+    this.source.restoreDefaultSimulatorState?.(args);
   }
 
   isConnected(): boolean {
@@ -159,10 +174,16 @@ export class SamplePipeline {
 
     deviceStore.setProvider(provider);
     await provider.connect();
+    if (deviceStore.sourceKind === 'Simulator') {
+      await useDeviceStore.getState().restoreDefaultSimulatorState({
+        hand: useAppStore.getState().hand,
+      });
+    }
   }
 
   disconnect(): void {
     this.finalizeActiveEffort();
+    this.stopQuickCapture('manual_stop', false);
 
     if (this.provider) {
       void this.provider.disconnect();
@@ -174,6 +195,7 @@ export class SamplePipeline {
     this.resetTotalSmoother();
     this.rawAutoswitchDone = false;
     this.measurementHand = null;
+    useLiveStore.getState().clearQuickMeasureRuntime({ preservePreset: true });
     useDeviceStore.getState().setProvider(null);
     useDeviceStore.getState().setConnectedDevice(null);
     useDeviceStore.getState().setConnectionState('idle', null);
@@ -183,6 +205,21 @@ export class SamplePipeline {
     if (useLiveStore.getState().currentEffortSamples.length > 0) {
       this.finalizeCurrentEffort();
     }
+  }
+
+  stopQuickCapture(reason: QuickCaptureCompletionReason = 'manual_stop', addStatus = true): void {
+    const live = useLiveStore.getState();
+    if (live.quickCapture.status === 'idle') return;
+
+    if (live.quickCapture.status === 'armed') {
+      live.cancelQuickCapture();
+      if (addStatus) {
+        useDeviceStore.getState().addStatus('Quick capture cancelled');
+      }
+      return;
+    }
+
+    this.finalizeQuickCapture(reason, addStatus);
   }
 
   private handleFrame = (frame: DeviceFrame): void => {
@@ -268,6 +305,18 @@ export class SamplePipeline {
     // Segmentation
     const evt = this.detector.update(this.sampleCounter, sample.tMs, sample.totalKg);
 
+    if (liveStore.quickCapture.status === 'armed' && evt.started) {
+      const definition = getQuickMeasureDefinition(liveStore.quickCapture.presetId ?? liveStore.quickMeasurePresetId);
+      liveStore.startQuickCapture(
+        sample,
+        definition.captureMode === 'timed_hold' && definition.captureDurationMs !== null
+          ? sample.tMs + definition.captureDurationMs
+          : null,
+      );
+    } else if (liveStore.quickCapture.status === 'capturing') {
+      liveStore.appendQuickCaptureSample(sample);
+    }
+
     if (evt.started) {
       liveStore.startEffortAccum(sample);
     } else if (this.detector.active) {
@@ -287,6 +336,18 @@ export class SamplePipeline {
         },
       );
       useLiveStore.setState({ currentEffort: metrics });
+    }
+
+    const nextQuickCapture = useLiveStore.getState().quickCapture;
+    if (
+      nextQuickCapture.status === 'capturing' &&
+      nextQuickCapture.autoStopAtMs !== null &&
+      sample.tMs >= nextQuickCapture.autoStopAtMs
+    ) {
+      this.finalizeQuickCapture('duration_complete');
+    } else if (evt.ended && nextQuickCapture.status === 'capturing') {
+      const definition = getQuickMeasureDefinition(nextQuickCapture.presetId ?? liveStore.quickMeasurePresetId);
+      this.finalizeQuickCapture(definition.captureMode === 'timed_hold' ? 'ended_early' : 'effort_complete');
     }
 
     if (evt.ended) {
@@ -348,6 +409,44 @@ export class SamplePipeline {
 
     if (liveStore.recording) {
       liveStore.addRecordedEffort(metrics);
+    }
+  }
+
+  private finalizeQuickCapture(reason: QuickCaptureCompletionReason, addStatus = true): void {
+    const liveStore = useLiveStore.getState();
+    const samples = liveStore.quickCaptureSamples;
+    if (samples.length < 2) {
+      liveStore.cancelQuickCapture();
+      if (addStatus) {
+        useDeviceStore.getState().addStatus('Quick capture discarded: not enough samples');
+      }
+      return;
+    }
+
+    const settings = useAppStore.getState().settings;
+    const result = buildQuickMeasureResult({
+      presetId: liveStore.quickCapture.presetId ?? liveStore.quickMeasurePresetId,
+      samples,
+      analysisConfig: {
+        tutThresholdKg: settings.tutThresholdKg,
+        holdPeakFraction: settings.holdPeakFraction,
+        stabilizationShiftThreshold: settings.stabilizationShiftThreshold,
+        stabilizationHoldMs: settings.stabilizationHoldMs,
+      },
+      completionReason: reason,
+    });
+
+    if (!result) {
+      liveStore.cancelQuickCapture();
+      if (addStatus) {
+        useDeviceStore.getState().addStatus('Quick capture discarded: not enough samples');
+      }
+      return;
+    }
+
+    liveStore.completeQuickCapture(result);
+    if (addStatus) {
+      useDeviceStore.getState().addStatus(formatQuickCompletionReason(reason));
     }
   }
 

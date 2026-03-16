@@ -4,6 +4,7 @@
 
 This document defines the shared benchmark and workout engine used in `v1.5`.
 
+- `LIVE` is the quick-check and short local measurement surface.
 - `TEST` is the benchmark surface.
 - `TRAIN` is the prescription and guided-execution surface.
 - Prescriptions should use measured per-finger data, not only static hangboard templates.

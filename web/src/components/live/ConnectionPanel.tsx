@@ -13,6 +13,7 @@ export function ConnectionPanel() {
   const connected = useDeviceStore(s => s.connected);
   const activeDevice = useDeviceStore(s => s.activeDevice);
   const recording = useLiveStore(s => s.recording);
+  const quickCapture = useLiveStore(s => s.quickCapture);
   const hand = useAppStore(s => s.hand);
   const setHand = useAppStore(s => s.setHand);
   const preferredSource = useAppStore(s => s.settings.preferredSource);
@@ -136,16 +137,21 @@ export function ConnectionPanel() {
 
         <button
           onClick={handleStartRecording}
-          disabled={!connected}
+          disabled={!connected || quickCapture.status !== 'idle'}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             recording
               ? 'bg-danger text-white hover:bg-danger/80'
               : 'bg-success/15 text-success hover:bg-success/25 border border-success/30'
           } disabled:opacity-30`}
         >
-          {recording ? 'Stop & Save' : 'Record'}
+          {recording ? 'Stop & Save Session' : 'Record Session'}
         </button>
       </div>
+      {quickCapture.status !== 'idle' && (
+        <div className="rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs text-muted">
+          Stop or clear the active quick capture before starting a session recording.
+        </div>
+      )}
       </div>
       <DevicePickerModal
         open={pickerOpen}

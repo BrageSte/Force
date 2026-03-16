@@ -48,6 +48,8 @@ import type {
 } from './types.ts';
 import { toProfileSnapshot } from '../../types/profile.ts';
 import { capabilityBlockReason, deviceCapabilitiesForSourceKind } from '../../device/capabilityChecks.ts';
+import { resolveSimulatorAthleteContext } from '../../device/simulatorAthlete.ts';
+import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 
 type TestPageView = 'library' | 'guided' | 'results' | 'compare' | 'finger' | 'session';
 
@@ -74,6 +76,7 @@ export function TestPage() {
   const [activeProtocol, setActiveProtocol] = useState<TestProtocol | null>(null);
   const [activeTargetKg, setActiveTargetKg] = useState<number | null>(null);
   const [activeOppositeBestPeakKg, setActiveOppositeBestPeakKg] = useState<number | null>(null);
+  const [activeSimulatorProfiles, setActiveSimulatorProfiles] = useState<Record<'Left' | 'Right', SimulatorAthleteProfile> | null>(null);
   const [alternateHands, setAlternateHands] = useState(false);
   const [runtimeAlternateHands, setRuntimeAlternateHands] = useState(false);
   const [currentResult, setCurrentResult] = useState<CompletedTestResult | null>(null);
@@ -232,6 +235,10 @@ export function TestPage() {
     setActiveProtocol(protocol);
     setActiveTargetKg(targetKg);
     setActiveOppositeBestPeakKg(oppositeBestPeak);
+    setActiveSimulatorProfiles({
+      Left: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileHistory, hand: 'Left' }),
+      Right: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileHistory, hand: 'Right' }),
+    });
     setRuntimeAlternateHands(resolveAlternateHands(protocol.handMode, alternateHands, protocol.protocolKind));
     setView('guided');
   };
@@ -269,6 +276,7 @@ export function TestPage() {
     setActiveProtocol(null);
     setActiveTargetKg(null);
     setActiveOppositeBestPeakKg(null);
+    setActiveSimulatorProfiles(null);
     setCurrentResult(null);
     setAnalysisHandPreference(null);
     setRuntimeAlternateHands(false);
@@ -383,6 +391,10 @@ export function TestPage() {
           oppositeHandBestPeakKg={activeOppositeBestPeakKg}
           alternateHands={runtimeAlternateHands}
           profile={activeProfile ? toProfileSnapshot(activeProfile) : null}
+          simulatorProfiles={activeSimulatorProfiles ?? {
+            Left: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileHistory, hand: 'Left' }),
+            Right: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileHistory, hand: 'Right' }),
+          }}
           onComplete={handleTestComplete}
           onCancel={resetToLibrary}
         />

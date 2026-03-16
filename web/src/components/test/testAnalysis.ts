@@ -1,4 +1,5 @@
 import { KG_TO_N, type Finger4, type Hand, type ProfileSnapshot } from '../../types/force.ts';
+import { computeContributionDriftPctFromFingerPctSeries } from '@krimblokk/core';
 import type {
   AttemptResult,
   AttemptSample,
@@ -431,25 +432,7 @@ function analyzeAttempt(
   const lateMean = mean(lateTotals);
   const earlyLateDropPct = earlyMean > 1e-9 ? ((lateMean - earlyMean) / earlyMean) * 100 : 0;
 
-  const earlyShares: Finger4 = [
-    mean(samples.slice(0, q).map(s => s.fingerPct[0])),
-    mean(samples.slice(0, q).map(s => s.fingerPct[1])),
-    mean(samples.slice(0, q).map(s => s.fingerPct[2])),
-    mean(samples.slice(0, q).map(s => s.fingerPct[3])),
-  ];
-  const lateShares: Finger4 = [
-    mean(samples.slice(-q).map(s => s.fingerPct[0])),
-    mean(samples.slice(-q).map(s => s.fingerPct[1])),
-    mean(samples.slice(-q).map(s => s.fingerPct[2])),
-    mean(samples.slice(-q).map(s => s.fingerPct[3])),
-  ];
-
-  const drift: Finger4 = [
-    lateShares[0] - earlyShares[0],
-    lateShares[1] - earlyShares[1],
-    lateShares[2] - earlyShares[2],
-    lateShares[3] - earlyShares[3],
-  ];
+  const drift = computeContributionDriftPctFromFingerPctSeries(samples.map(sample => sample.fingerPct));
 
   const fatigueSlope: Finger4 = [
     slopeLinear(timeSec, samples.map(s => s.fingerKg[0])),

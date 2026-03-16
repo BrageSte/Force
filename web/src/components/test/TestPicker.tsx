@@ -79,7 +79,7 @@ export function TestPicker({
         <div>
           <h2 className="text-lg font-semibold">Test Library</h2>
           <p className="text-xs text-muted mt-1">
-            Pick a protocol for {hand} hand on {activeProfileName}, or build a custom template with its own timing and dashboard defaults.
+            `TEST` is the formal benchmark surface. Pick a structured protocol for {hand} hand on {activeProfileName}, or build a custom template for repeatable tracking over time.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">

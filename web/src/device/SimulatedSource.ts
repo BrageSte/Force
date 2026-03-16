@@ -1,75 +1,39 @@
+import type { DeviceStreamMode } from '@krimblokk/core';
 import type { DataSource } from '../types/device.ts';
 import type { AcquisitionSample, Finger4 } from '../types/force.ts';
-import type { DeviceStreamMode } from '@krimblokk/core';
-
-interface Profile {
-  kind: string;
-  rampMs: number;
-  holdMs: number;
-  releaseMs: number;
-  peakTotalKg: number;
-  fingerShare: Finger4;
-}
-
-function randomBetween(min: number, max: number): number {
-  return min + Math.random() * (max - min);
-}
-
-function randomInt(min: number, max: number): number {
-  return Math.floor(randomBetween(min, max + 1));
-}
-
-function randomShare(): Finger4 {
-  const base = [
-    randomBetween(0.20, 0.34),
-    randomBetween(0.20, 0.34),
-    randomBetween(0.16, 0.28),
-    randomBetween(0.10, 0.23),
-  ];
-  const s = base.reduce((a, b) => a + b, 0);
-  return base.map(b => b / s) as Finger4;
-}
-
-function makeMaxPullProfile(): Profile {
-  return {
-    kind: 'max_pull',
-    rampMs: randomInt(350, 850),
-    holdMs: randomInt(120, 450),
-    releaseMs: randomInt(500, 1000),
-    peakTotalKg: randomBetween(14, 42),
-    fingerShare: randomShare(),
-  };
-}
-
-function makeHangProfile(): Profile {
-  return {
-    kind: 'hang',
-    rampMs: randomInt(600, 1300),
-    holdMs: randomInt(3000, 9000),
-    releaseMs: randomInt(800, 1800),
-    peakTotalKg: randomBetween(10, 28),
-    fingerShare: randomShare(),
-  };
-}
-
-function gaussNoise(stddev: number): number {
-  // Box-Muller transform
-  const u1 = Math.random() || 1e-10;
-  const u2 = Math.random();
-  return stddev * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-}
+import {
+  buildAutonomousSimulatorBlueprint,
+  buildGuidedSimulatorBlueprint,
+  createDefaultSimulatorRuntimeState,
+  createRestoreSimulatorArgs,
+  idleSimulatorKg,
+  nextFreeRunGapMs,
+  sampleSimulatorBlueprintKg,
+  simulatorStateStatus,
+  simulatorValuesForStreamMode,
+  type SimulatorEffortBlueprint,
+} from './simulatorModel.ts';
+import { createDefaultSimulatorAthleteProfile } from './simulatorAthlete.ts';
+import type {
+  RestoreSimulatorArgs,
+  SimulatorAthleteProfile,
+  SimulatorRuntimeState,
+} from './simulatorTypes.ts';
 
 export class SimulatedSource implements DataSource {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private startWallMs = 0;
   private lastEmitMs = 0;
-  private currentProfile: Profile | null = null;
-  private profileStartMs = 0;
-  private nextAutoTriggerMs = 1500;
   private streamMode: DeviceStreamMode;
   private rawOffsets: Finger4 = [100000, 105000, 97000, 102000];
   private rawScales: Finger4 = [1e-5, 1e-5, 1e-5, 1e-5];
+  private runtimeState: SimulatorRuntimeState = createDefaultSimulatorRuntimeState();
+  private athleteProfile: SimulatorAthleteProfile = createDefaultSimulatorAthleteProfile();
+  private activeBlueprint: SimulatorEffortBlueprint | null = null;
+  private blueprintStartedAtMs = 0;
+  private nextAutoTriggerMs = 1600;
+  private lastStatusKey = '';
 
   onSample: ((s: AcquisitionSample) => void) | null = null;
   onStatus: ((msg: string) => void) | null = null;
@@ -84,9 +48,11 @@ export class SimulatedSource implements DataSource {
     this.running = true;
     this.startWallMs = performance.now();
     this.lastEmitMs = 0;
-    this.nextAutoTriggerMs = 1500;
-    this.currentProfile = null;
-    this.timer = setInterval(() => this.tick(), 20); // ~50Hz
+    this.activeBlueprint = null;
+    this.blueprintStartedAtMs = 0;
+    this.nextAutoTriggerMs = 1600;
+    this.runtimeState = createDefaultSimulatorRuntimeState(this.runtimeState.hand, this.athleteProfile);
+    this.timer = setInterval(() => this.tick(), 20);
     this.onConnectionChange?.(true);
     this.onStatus?.(`Simulator connected (${this.streamMode})`);
   }
@@ -128,6 +94,38 @@ export class SimulatedSource implements DataSource {
     this.onStatus?.(`Simulator ignored command: ${cmd.trim()}`);
   }
 
+  setSimulatorState(state: SimulatorRuntimeState): void {
+    this.runtimeState = { ...state };
+    this.athleteProfile = {
+      referenceMaxKg: state.referenceMaxKg,
+      referenceSource: this.athleteProfile.referenceSource,
+      baseFingerShare: [...state.baseFingerShare] as Finger4,
+      weakFingerIndex: state.weakFingerIndex,
+    };
+
+    if (state.phase === 'work') {
+      this.activeBlueprint = buildGuidedSimulatorBlueprint(state);
+      this.blueprintStartedAtMs = this.elapsedMs();
+    } else {
+      this.activeBlueprint = null;
+      this.nextAutoTriggerMs = this.elapsedMs() + nextFreeRunGapMs();
+    }
+
+    this.emitStatusForState(state);
+  }
+
+  restoreDefaultSimulatorState(args?: RestoreSimulatorArgs): void {
+    const restored = createRestoreSimulatorArgs(args);
+    if (restored.athlete) {
+      this.athleteProfile = restored.athlete;
+    }
+    this.runtimeState = createDefaultSimulatorRuntimeState(restored.hand, restored.athlete ?? this.athleteProfile);
+    this.activeBlueprint = null;
+    this.blueprintStartedAtMs = 0;
+    this.nextAutoTriggerMs = this.elapsedMs() + nextFreeRunGapMs();
+    this.emitStatusForState(this.runtimeState);
+  }
+
   private elapsedMs(): number {
     return performance.now() - this.startWallMs;
   }
@@ -139,69 +137,51 @@ export class SimulatedSource implements DataSource {
     if (tMs <= this.lastEmitMs) tMs = this.lastEmitMs + 20;
     this.lastEmitMs = tMs;
 
-    // Auto-trigger profiles
-    if (this.currentProfile === null && tMs >= this.nextAutoTriggerMs) {
-      this.currentProfile = Math.random() < 0.55 ? makeMaxPullProfile() : makeHangProfile();
-      this.profileStartMs = tMs;
-    }
-
     const kg = this.sampleKg(tMs);
-    const values: Finger4 = this.streamMode === 'raw'
-      ? [
-          this.rawOffsets[0] + (kg[0] / this.rawScales[0]),
-          this.rawOffsets[1] + (kg[1] / this.rawScales[1]),
-          this.rawOffsets[2] + (kg[2] / this.rawScales[2]),
-          this.rawOffsets[3] + (kg[3] / this.rawScales[3]),
-        ]
-      : kg;
+    const values = simulatorValuesForStreamMode(kg, this.streamMode, this.rawOffsets, this.rawScales);
     this.onSample?.({ tMs, values });
   }
 
   private sampleKg(tMs: number): Finger4 {
-    const noise: Finger4 = [gaussNoise(0.03), gaussNoise(0.03), gaussNoise(0.03), gaussNoise(0.03)];
-
-    if (this.currentProfile === null) {
-      return noise; // idle drift
+    if (this.runtimeState.mode === 'guided') {
+      if (!this.activeBlueprint) return idleSimulatorKg();
+      const sample = sampleSimulatorBlueprintKg(this.activeBlueprint, tMs - this.blueprintStartedAtMs);
+      return sample ?? idleSimulatorKg();
     }
 
-    const p = this.currentProfile;
-    const e = tMs - this.profileStartMs;
-    const totalDur = p.rampMs + p.holdMs + p.releaseMs;
-
-    if (e < 0) return noise;
-    if (e >= totalDur) {
-      this.currentProfile = null;
-      this.nextAutoTriggerMs = tMs + randomInt(2500, 8000);
-      return noise;
+    if (!this.activeBlueprint && tMs >= this.nextAutoTriggerMs) {
+      this.activeBlueprint = buildAutonomousSimulatorBlueprint(this.athleteProfile);
+      this.blueprintStartedAtMs = tMs;
     }
 
-    let gain: number;
-    if (e < p.rampMs) {
-      gain = e / Math.max(1, p.rampMs);
-    } else if (e < p.rampMs + p.holdMs) {
-      gain = 1.0;
-    } else {
-      const releaseE = e - (p.rampMs + p.holdMs);
-      gain = Math.max(0, 1 - releaseE / Math.max(1, p.releaseMs));
+    if (!this.activeBlueprint) {
+      return idleSimulatorKg();
     }
 
-    // Small distribution drift
-    const drift = 0.04 * Math.sin(e / 350);
-    const rawShare = [
-      Math.max(0.02, p.fingerShare[0] + drift),
-      Math.max(0.02, p.fingerShare[1] - drift * 0.6),
-      Math.max(0.02, p.fingerShare[2] - drift * 0.2),
-      Math.max(0.02, p.fingerShare[3] - drift * 0.2),
-    ];
-    const shareSum = rawShare.reduce((a, b) => a + b, 0);
-    const share = rawShare.map(s => s / shareSum);
+    const sample = sampleSimulatorBlueprintKg(this.activeBlueprint, tMs - this.blueprintStartedAtMs);
+    if (sample) {
+      return sample;
+    }
 
-    const totalForce = p.peakTotalKg * gain;
-    return [
-      totalForce * share[0] + noise[0],
-      totalForce * share[1] + noise[1],
-      totalForce * share[2] + noise[2],
-      totalForce * share[3] + noise[3],
-    ];
+    this.activeBlueprint = null;
+    this.nextAutoTriggerMs = tMs + nextFreeRunGapMs();
+    return idleSimulatorKg();
+  }
+
+  private emitStatusForState(state: SimulatorRuntimeState): void {
+    const status = simulatorStateStatus(state);
+    const statusKey = [
+      state.mode,
+      state.phase,
+      state.hand,
+      state.pattern,
+      state.sessionLabel ?? '',
+      state.detailLabel ?? '',
+      state.attemptNo ?? '',
+      state.totalAttempts ?? '',
+    ].join('|');
+    if (statusKey === this.lastStatusKey) return;
+    this.lastStatusKey = statusKey;
+    this.onStatus?.(status);
   }
 }

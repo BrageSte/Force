@@ -8,7 +8,7 @@ import type { AttemptSample, CompletedTestResult, TestProtocol, TestRunnerPhase 
 import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 import { sendTareCommand } from '../../live/sessionWorkflow.ts';
 import { useAudioCuePlayer } from './guided/audioCues.ts';
-import { buildAttemptSampleFromMeasuredFrame, polylinePath } from './guided/liveCapture.ts';
+import { buildAttemptSampleFromMeasuredFrame, polylinePathFromCoordinates } from './guided/liveCapture.ts';
 import { QuickControlsCard } from './guided/QuickControlsCard.tsx';
 import { buildCompletedResults } from './guided/resultAssembly.ts';
 import {
@@ -21,6 +21,8 @@ import {
 } from './guided/runnerState.ts';
 import { LiveForcePanel } from './guided/LiveForcePanel.tsx';
 import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
+import { buildTestSimulatorState } from '../../device/simulatorModel.ts';
+import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 
 interface GuidedTestScreenProps {
   protocol: TestProtocol;
@@ -29,8 +31,52 @@ interface GuidedTestScreenProps {
   oppositeHandBestPeakKg: number | null;
   alternateHands: boolean;
   profile: ProfileSnapshot | null;
+  simulatorProfiles: Record<Hand, SimulatorAthleteProfile>;
   onComplete: (result: CompletedTestResult | CompletedTestResult[]) => void;
   onCancel: () => void;
+}
+
+interface LiveTraceSeries {
+  key: string;
+  label: string;
+  color: string;
+  values: number[];
+}
+
+const TRACE_VIEWBOX_WIDTH = 720;
+const TRACE_VIEWBOX_HEIGHT = 320;
+const TRACE_MARGIN = {
+  top: 16,
+  right: 18,
+  bottom: 40,
+  left: 58,
+};
+const TRACE_PLOT_WIDTH = TRACE_VIEWBOX_WIDTH - TRACE_MARGIN.left - TRACE_MARGIN.right;
+const TRACE_PLOT_HEIGHT = TRACE_VIEWBOX_HEIGHT - TRACE_MARGIN.top - TRACE_MARGIN.bottom;
+
+function buildLinearTicks(maxValue: number, segments: number): number[] {
+  const safeMax = Math.max(0, maxValue);
+  const safeSegments = Math.max(1, segments);
+  return Array.from({ length: safeSegments + 1 }, (_, index) => (safeMax * index) / safeSegments);
+}
+
+function formatTraceKgLabel(value: number): string {
+  return value >= 10 ? value.toFixed(0) : value.toFixed(1);
+}
+
+function formatTraceTimeLabel(ms: number): string {
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(Number.isInteger(seconds) ? 0 : 1)}s`;
+}
+
+function maxSeriesValue(seriesCollection: number[][]): number {
+  let maxValue = 0;
+  for (const series of seriesCollection) {
+    for (const value of series) {
+      maxValue = Math.max(maxValue, value);
+    }
+  }
+  return maxValue;
 }
 
 export function GuidedTestScreen({
@@ -40,6 +86,7 @@ export function GuidedTestScreen({
   oppositeHandBestPeakKg,
   alternateHands,
   profile,
+  simulatorProfiles,
   onComplete,
   onCancel,
 }: GuidedTestScreenProps) {
@@ -80,6 +127,7 @@ export function GuidedTestScreen({
   const [clockMs, setClockMs] = useState<number>(0);
   const [livePreview, setLivePreview] = useState<AttemptSample[]>([]);
   const [attemptStartAtMs, setAttemptStartAtMs] = useState<number>(0);
+  const [showTotalTrace, setShowTotalTrace] = useState<boolean>(!perFingerForce);
 
   const currentSamplesRef = useRef<AttemptSample[]>([]);
   const attemptStartAtMsRef = useRef<number>(0);
@@ -122,6 +170,12 @@ export function GuidedTestScreen({
   useEffect(() => {
     setVisibleLivePanels(protocol.livePanels);
   }, [protocol]);
+
+  useEffect(() => {
+    if (!perFingerForce) {
+      setShowTotalTrace(true);
+    }
+  }, [perFingerForce]);
 
   const applyMeasurementHand = useCallback((nextHand: Hand) => {
     activeHandRef.current = nextHand;
@@ -171,7 +225,7 @@ export function GuidedTestScreen({
       setQueuedHand(null);
       onComplete(results);
     },
-    [alternateHands, hand, onComplete, oppositeHandBestPeakKg, profile, protocol, secondaryHand, targetKg, visibleLivePanels],
+    [alternateHands, device, hand, onComplete, oppositeHandBestPeakKg, profile, protocol, secondaryHand, targetKg, visibleLivePanels],
   );
 
   const advanceAfterRecoveryDecision = useCallback(
@@ -397,18 +451,54 @@ export function GuidedTestScreen({
   }, [activeHand, attemptsByHand, phase, protocol.attemptCount]);
   const timerLabel = formatTimerLabel(phase, remainingMs);
   const liveTotals = livePreview.map(s => s.totalKg);
-  const chartMax = Math.max(targetKg ?? 0, ...liveTotals, latestMeasuredTotalKg, 5) * 1.15;
+  const liveTimes = livePreview.map(sample => sample.tMs);
   const canTare = connected && phase !== 'countdown' && phase !== 'live_effort' && phase !== 'hold_complete';
   const visiblePanelSet = useMemo(() => new Set(visibleLivePanels), [visibleLivePanels]);
   const hasTargetPanel = visiblePanelSet.has('target') && protocol.targetMode !== 'none';
   const activeFingerOrder = useMemo(() => displayFingerOrder(activeHand), [activeHand]);
   const liveFingerTraces = useMemo(
-    () => activeFingerOrder.map(fingerIndex => ({
-      fingerIndex,
-      values: livePreview.map(sample => sample.fingerKg[fingerIndex]),
-    })),
-    [activeFingerOrder, livePreview],
+    () => (
+      perFingerForce
+        ? activeFingerOrder.map(fingerIndex => ({
+            fingerIndex,
+            values: livePreview.map(sample => sample.fingerKg[fingerIndex]),
+          }))
+        : []
+    ),
+    [activeFingerOrder, livePreview, perFingerForce],
   );
+  const liveTraceSeries = useMemo<LiveTraceSeries[]>(() => {
+    const fingerSeries: LiveTraceSeries[] = liveFingerTraces.map(trace => ({
+      key: FINGER_NAMES[trace.fingerIndex],
+      label: FINGER_NAMES[trace.fingerIndex],
+      color: FINGER_COLORS[trace.fingerIndex],
+      values: trace.values,
+    }));
+
+    if (showTotalTrace) {
+      fingerSeries.push({
+        key: 'Total',
+        label: 'Total',
+        color: TOTAL_COLOR,
+        values: liveTotals,
+      });
+    }
+
+    return fingerSeries;
+  }, [liveFingerTraces, liveTotals, showTotalTrace]);
+  const targetTraceKg = targetKg ?? 0;
+  const showTargetBand = showTotalTrace && targetKg !== null;
+  const traceDurationMs = Math.max(1000, protocol.durationSec * 1000, liveTimes.at(-1) ?? 0);
+  const traceBaseMaxKg = maxSeriesValue(liveTraceSeries.map(series => series.values));
+  const traceMinKg = showTotalTrace ? 5 : 2;
+  const traceMaxKg = Math.max(
+    traceMinKg,
+    traceBaseMaxKg,
+    showTotalTrace ? latestMeasuredTotalKg : 0,
+    showTargetBand ? targetTraceKg * 1.05 : 0,
+  ) * 1.08;
+  const traceXTicks = useMemo(() => buildLinearTicks(traceMaxKg, 4), [traceMaxKg]);
+  const traceYTicks = useMemo(() => buildLinearTicks(traceDurationMs, 4), [traceDurationMs]);
   const leftPanelsSelected = LIVE_PANEL_CATALOG.filter(panel => panel.slot === 'left' && visiblePanelSet.has(panel.id));
   const showSplitLayout = leftPanelsSelected.length > 0;
   const renderedRightPanelCount =
@@ -467,6 +557,29 @@ export function GuidedTestScreen({
       useLiveStore.getState().setMeasurementHandOverride(null);
     };
   }, [applyMeasurementHand, hand]);
+
+  useEffect(() => {
+    if (sourceKind !== 'Simulator') return;
+    const athlete = simulatorProfiles[activeHand] ?? simulatorProfiles[hand];
+    void useDeviceStore.getState().setSimulatorState(buildTestSimulatorState({
+      protocol,
+      phase,
+      hand: activeHand,
+      athlete,
+      targetKg,
+      attemptNo: currentAttemptNo,
+    }));
+  }, [activeHand, currentAttemptNo, hand, phase, protocol, simulatorProfiles, sourceKind, targetKg]);
+
+  useEffect(() => {
+    if (sourceKind !== 'Simulator') return;
+    return () => {
+      void useDeviceStore.getState().restoreDefaultSimulatorState({
+        hand,
+        athlete: simulatorProfiles[hand],
+      });
+    };
+  }, [hand, simulatorProfiles, sourceKind]);
 
   return (
     <div className="space-y-4">
@@ -691,61 +804,181 @@ export function GuidedTestScreen({
           {visiblePanelSet.has('trace') && (
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="text-xs text-muted uppercase tracking-wide mb-2">Live Trace</div>
-              <svg viewBox="0 0 640 220" className="w-full h-[220px] md:h-[280px] rounded-lg bg-bg border border-border">
-                {targetKg && (
-                  <>
-                    <line
-                      x1="0"
-                      x2="640"
-                      y1={(220 - ((targetKg * 1.05) / chartMax) * 220).toFixed(1)}
-                      y2={(220 - ((targetKg * 1.05) / chartMax) * 220).toFixed(1)}
-                      stroke="#3b8df866"
-                      strokeDasharray="4 4"
-                      strokeWidth="1"
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="min-w-0">
+                  <svg
+                    aria-label="Live trace chart"
+                    viewBox={`0 0 ${TRACE_VIEWBOX_WIDTH} ${TRACE_VIEWBOX_HEIGHT}`}
+                    className="w-full h-[260px] md:h-[320px] rounded-lg bg-bg border border-border"
+                  >
+                    <text
+                      x={TRACE_VIEWBOX_WIDTH / 2}
+                      y={TRACE_VIEWBOX_HEIGHT - 8}
+                      textAnchor="middle"
+                      fill="#8892a8"
+                      fontSize="11"
+                    >
+                      Weight (kg)
+                    </text>
+                    <text
+                      x="16"
+                      y={TRACE_MARGIN.top + TRACE_PLOT_HEIGHT / 2}
+                      transform={`rotate(-90 16 ${TRACE_MARGIN.top + TRACE_PLOT_HEIGHT / 2})`}
+                      textAnchor="middle"
+                      fill="#8892a8"
+                      fontSize="11"
+                    >
+                      Time (s)
+                    </text>
+                    <g transform={`translate(${TRACE_MARGIN.left} ${TRACE_MARGIN.top})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width={TRACE_PLOT_WIDTH}
+                        height={TRACE_PLOT_HEIGHT}
+                        rx="12"
+                        fill="#0f1117"
+                      />
+                      {traceXTicks.map(tick => {
+                        const x = (tick / Math.max(1e-6, traceMaxKg)) * TRACE_PLOT_WIDTH;
+                        return (
+                          <g key={`trace-x-${tick.toFixed(2)}`}>
+                            <line
+                              x1={x}
+                              x2={x}
+                              y1="0"
+                              y2={TRACE_PLOT_HEIGHT}
+                              stroke="#2e334530"
+                              strokeWidth="1"
+                            />
+                            <text
+                              x={x}
+                              y={TRACE_PLOT_HEIGHT + 18}
+                              textAnchor={x <= 4 ? 'start' : x >= TRACE_PLOT_WIDTH - 4 ? 'end' : 'middle'}
+                              fill="#8892a8"
+                              fontSize="11"
+                            >
+                              {formatTraceKgLabel(tick)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      {traceYTicks.map(tick => {
+                        const y = (tick / Math.max(1e-6, traceDurationMs)) * TRACE_PLOT_HEIGHT;
+                        const labelY = Math.min(TRACE_PLOT_HEIGHT - 2, Math.max(11, y + 4));
+                        return (
+                          <g key={`trace-y-${tick.toFixed(0)}`}>
+                            <line
+                              x1="0"
+                              x2={TRACE_PLOT_WIDTH}
+                              y1={y}
+                              y2={y}
+                              stroke="#2e334530"
+                              strokeWidth="1"
+                            />
+                            <text
+                              x="-10"
+                              y={labelY}
+                              textAnchor="end"
+                              fill="#8892a8"
+                              fontSize="11"
+                            >
+                              {formatTraceTimeLabel(tick)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      {showTargetBand && (
+                        <>
+                          <line
+                            x1={((targetTraceKg * 0.95) / Math.max(1e-6, traceMaxKg)) * TRACE_PLOT_WIDTH}
+                            x2={((targetTraceKg * 0.95) / Math.max(1e-6, traceMaxKg)) * TRACE_PLOT_WIDTH}
+                            y1="0"
+                            y2={TRACE_PLOT_HEIGHT}
+                            stroke="#3b8df866"
+                            strokeDasharray="4 4"
+                            strokeWidth="1"
+                          />
+                          <line
+                            x1={((targetTraceKg * 1.05) / Math.max(1e-6, traceMaxKg)) * TRACE_PLOT_WIDTH}
+                            x2={((targetTraceKg * 1.05) / Math.max(1e-6, traceMaxKg)) * TRACE_PLOT_WIDTH}
+                            y1="0"
+                            y2={TRACE_PLOT_HEIGHT}
+                            stroke="#3b8df866"
+                            strokeDasharray="4 4"
+                            strokeWidth="1"
+                          />
+                        </>
+                      )}
+                      <line x1="0" x2={TRACE_PLOT_WIDTH} y1="0" y2="0" stroke="#2e3345" strokeWidth="1.2" />
+                      <line x1="0" x2="0" y1="0" y2={TRACE_PLOT_HEIGHT} stroke="#2e3345" strokeWidth="1.2" />
+                      {liveTraceSeries.map(series => (
+                        <polyline
+                          key={series.key}
+                          fill="none"
+                          stroke={series.color}
+                          strokeWidth={series.key === 'Total' ? 2.4 : 1.7}
+                          strokeOpacity="0.96"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                          points={polylinePathFromCoordinates(
+                            series.values,
+                            liveTimes,
+                            TRACE_PLOT_WIDTH,
+                            TRACE_PLOT_HEIGHT,
+                            traceMaxKg,
+                            traceDurationMs,
+                          )}
+                        />
+                      ))}
+                    </g>
+                  </svg>
+                </div>
+                <div className="space-y-3 rounded-lg border border-border bg-surface-alt/60 p-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">Graph Options</div>
+                    <div className="mt-1 text-xs text-muted">
+                      Fingers are shown by default. Weight runs left to right, and time runs top to bottom.
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text">
+                    <input
+                      type="checkbox"
+                      aria-label="Include total trace"
+                      checked={showTotalTrace}
+                      onChange={event => setShowTotalTrace(event.target.checked)}
+                      disabled={!perFingerForce}
+                      className="accent-blue-500"
                     />
-                    <line
-                      x1="0"
-                      x2="640"
-                      y1={(220 - ((targetKg * 0.95) / chartMax) * 220).toFixed(1)}
-                      y2={(220 - ((targetKg * 0.95) / chartMax) * 220).toFixed(1)}
-                      stroke="#3b8df866"
-                      strokeDasharray="4 4"
-                      strokeWidth="1"
-                    />
-                  </>
-                )}
-                {liveFingerTraces.map(trace => (
-                  <polyline
-                    key={FINGER_NAMES[trace.fingerIndex]}
-                    fill="none"
-                    stroke={FINGER_COLORS[trace.fingerIndex]}
-                    strokeWidth="1.5"
-                    strokeOpacity="0.95"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    points={polylinePath(trace.values, 640, 220, chartMax)}
-                  />
-                ))}
-                <polyline
-                  fill="none"
-                  stroke={TOTAL_COLOR}
-                  strokeWidth="2.4"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  points={polylinePath(liveTotals, 640, 220, chartMax)}
-                />
-              </svg>
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-2.5 py-1 text-text">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TOTAL_COLOR }} />
-                  Total
-                </span>
-                {liveFingerTraces.map(trace => (
-                  <span key={`legend-${FINGER_NAMES[trace.fingerIndex]}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-alt px-2.5 py-1 text-text">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: FINGER_COLORS[trace.fingerIndex] }} />
-                    {FINGER_NAMES[trace.fingerIndex]}
-                  </span>
-                ))}
+                    <span>Include total</span>
+                  </label>
+                  {targetKg !== null && (
+                    <div className="text-xs text-muted">
+                      {showTargetBand
+                        ? `Target band: ${(targetKg * 0.95).toFixed(1)} to ${(targetKg * 1.05).toFixed(1)} kg`
+                        : 'Enable total to show the target band for this attempt.'}
+                    </div>
+                  )}
+                  {!perFingerForce && (
+                    <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                      This source streams total force only, so the total trace stays enabled automatically.
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">Traces</div>
+                    <div className="mt-2 space-y-2 text-[11px]">
+                      {liveTraceSeries.map(series => (
+                        <div
+                          key={`legend-${series.key}`}
+                          className="inline-flex w-full items-center gap-2 rounded-full border border-border bg-bg px-2.5 py-1 text-text"
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
+                          {series.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {Array.from({ length: protocol.attemptCount }, (_, index) => {
@@ -770,7 +1003,7 @@ export function GuidedTestScreen({
                 })}
               </div>
               <div className="mt-2 text-xs text-muted">
-                Total force and each finger are overlaid so takeover and drift show up during the pull. Force below 1.0 kg is flattened to zero so idle noise stays hidden.
+                Finger traces stay in focus by default. Turn on total at the side when you want to compare whole-hand output against each finger during the pull.
               </div>
             </div>
           )}

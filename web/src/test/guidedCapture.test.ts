@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAttemptSampleFromMeasuredFrame } from '../components/test/guided/liveCapture.ts'
+import { buildAttemptSampleFromMeasuredFrame, polylinePathFromCoordinates } from '../components/test/guided/liveCapture.ts'
 import type { TestProtocol } from '../components/test/types.ts'
 
 const protocol: TestProtocol = {
@@ -54,5 +54,18 @@ describe('guided test capture', () => {
     expect(sample.totalKg).toBeCloseTo(0.35)
     expect(sample.fingerKg).toEqual([0.1, 0.1, 0.1, 0.05])
     expect(sample.fingerPct[0]).toBeGreaterThan(0)
+  })
+
+  it('maps weight to x and time to y for the rotated live trace', () => {
+    const points = polylinePathFromCoordinates(
+      [0, 2, 4],
+      [0, 500, 1000],
+      100,
+      200,
+      4,
+      1000,
+    )
+
+    expect(points).toBe('0.0,0.0 50.0,100.0 100.0,200.0')
   })
 })

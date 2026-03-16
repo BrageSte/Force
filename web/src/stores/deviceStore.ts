@@ -9,6 +9,7 @@ import type {
   DeviceScanResult,
 } from '../types/device.ts';
 import type { ConnectedDeviceInfo } from '../types/force.ts';
+import type { RestoreSimulatorArgs, SimulatorRuntimeState } from '../device/simulatorTypes.ts';
 
 interface DeviceState {
   sourceKind: SourceKind;
@@ -34,6 +35,8 @@ interface DeviceState {
   stopStreaming: () => Promise<void>;
   getBatteryStatus: () => Promise<number | null>;
   setInputMode: (inputMode: InputMode) => Promise<void>;
+  setSimulatorState: (state: SimulatorRuntimeState) => Promise<void>;
+  restoreDefaultSimulatorState: (args?: RestoreSimulatorArgs) => Promise<void>;
 }
 
 function createProvider(kind: SourceKind, inputMode: InputMode): DeviceProvider {
@@ -139,5 +142,17 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     const provider = get().provider;
     if (!provider?.setInputMode) return;
     await provider.setInputMode(inputMode);
+  },
+
+  setSimulatorState: async (state) => {
+    const provider = get().provider;
+    if (!provider?.setSimulatorState) return;
+    await provider.setSimulatorState(state);
+  },
+
+  restoreDefaultSimulatorState: async (args) => {
+    const provider = get().provider;
+    if (!provider?.restoreDefaultSimulatorState) return;
+    await provider.restoreDefaultSimulatorState(args);
   },
 }));

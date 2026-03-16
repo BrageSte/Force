@@ -19,6 +19,27 @@ export function polylinePath(values: number[], width: number, height: number, ma
     .join(' ');
 }
 
+export function polylinePathFromCoordinates(
+  xValues: number[],
+  yValues: number[],
+  width: number,
+  height: number,
+  maxX: number,
+  maxY: number,
+): string {
+  const count = Math.min(xValues.length, yValues.length);
+  if (count === 0) return '';
+
+  const safeMaxX = Math.max(1e-6, maxX);
+  const safeMaxY = Math.max(1e-6, maxY);
+
+  return Array.from({ length: count }, (_, index) => {
+    const x = (Math.max(0, xValues[index]) / safeMaxX) * width;
+    const y = (Math.max(0, yValues[index]) / safeMaxY) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
 export function bestPeakOfAttempts(attempts: AttemptSample[][]): number | null {
   if (attempts.length === 0) return null;
   let best = 0;

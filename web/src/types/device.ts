@@ -9,6 +9,10 @@ import type {
   InputMode,
   SourceKind,
 } from '@krimblokk/core';
+import type {
+  RestoreSimulatorArgs,
+  SimulatorRuntimeState,
+} from '../device/simulatorTypes.ts';
 
 export interface DataSource {
   start(): Promise<void>;
@@ -17,6 +21,8 @@ export interface DataSource {
 
   sendCommand?(cmd: string): void;
   setStreamMode?(mode: DeviceStreamMode): void;
+  setSimulatorState?(state: SimulatorRuntimeState): void;
+  restoreDefaultSimulatorState?(args?: RestoreSimulatorArgs): void;
 
   onSample: ((sample: AcquisitionSample) => void) | null;
   onStatus: ((message: string) => void) | null;
@@ -87,6 +93,8 @@ export interface DeviceProvider {
   sendCommand?(cmd: string): Promise<boolean>;
   sendDeviceCommand?(command: DeviceCommand): Promise<boolean>;
   setInputMode?(inputMode: InputMode): Promise<void> | void;
+  setSimulatorState?(state: SimulatorRuntimeState): Promise<void> | void;
+  restoreDefaultSimulatorState?(args?: RestoreSimulatorArgs): Promise<void> | void;
   isConnected(): boolean;
   getConnectedDevice(): ConnectedDeviceInfo | null;
 }

@@ -4,6 +4,7 @@
 
 `TEST` and `TRAIN` stay separate in `v1.5`.
 
+- `LIVE` handles quick checks and short local measurements.
 - `TEST` benchmarks the athlete.
 - `TRAIN` applies those results through guided workouts, recommendations, and custom sessions.
 

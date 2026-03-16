@@ -11,6 +11,8 @@ import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
+import { buildTrainSimulatorState } from '../../device/simulatorModel.ts';
+import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import { useAudioCuePlayer } from '../test/guided/audioCues.ts';
 import { buildTrainSessionResult, buildTrainTimeline, formatGripSpec, plannedRepCount, scoreRepAdherence } from './trainUtils.ts';
@@ -35,6 +37,7 @@ interface GuidedTrainScreenProps {
   benchmarkSourceId?: string;
   benchmarkSourceLabel?: string;
   benchmarkReference: BenchmarkReferenceResolution | null;
+  simulatorProfiles: Record<Hand, SimulatorAthleteProfile>;
   previousResult: TrainSessionResult | null;
   recommendation: TrainRecommendation | null;
   latestBenchmark: CompletedTestResult | null;
@@ -68,6 +71,7 @@ export function GuidedTrainScreen({
   benchmarkSourceId,
   benchmarkSourceLabel,
   benchmarkReference,
+  simulatorProfiles,
   previousResult,
   recommendation,
   latestBenchmark,
@@ -142,6 +146,7 @@ export function GuidedTrainScreen({
     setResolvedTargetKg(targetKg);
   }, [targetKg]);
   const fingerOrder = useMemo(() => displayOrder(hand), [hand]);
+  const currentStep = currentStepIndex >= 0 ? timeline[currentStepIndex] ?? null : null;
 
   useEffect(() => {
     useLiveStore.getState().setMeasurementHandOverride(hand);
@@ -152,6 +157,29 @@ export function GuidedTrainScreen({
       useLiveStore.getState().setMeasurementHandOverride(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (sourceKind !== 'Simulator') return;
+    const athlete = simulatorProfiles[hand];
+    void useDeviceStore.getState().setSimulatorState(buildTrainSimulatorState({
+      protocol,
+      phase,
+      hand,
+      athlete,
+      currentStep,
+      targetKg: resolvedTargetKg,
+    }));
+  }, [currentStep, hand, phase, protocol, resolvedTargetKg, simulatorProfiles, sourceKind]);
+
+  useEffect(() => {
+    if (sourceKind !== 'Simulator') return;
+    return () => {
+      void useDeviceStore.getState().restoreDefaultSimulatorState({
+        hand,
+        athlete: simulatorProfiles[hand],
+      });
+    };
+  }, [hand, simulatorProfiles, sourceKind]);
 
   const setTimedPhase = useCallback((nextPhase: TrainRunnerPhase, durationMs: number) => {
     const now = performance.now();
@@ -212,7 +240,7 @@ export function GuidedTrainScreen({
     setPhase('finished');
     setPhaseDurationMs(0);
     onComplete(result);
-  }, [benchmarkSourceId, benchmarkSourceLabel, bodyweightRelativeTarget, hand, latestBenchmark, onComplete, previousResult, profile, protocol, recommendation, resolvedTargetKg, sourceMaxKg, startedAtIso, targetMode]);
+  }, [benchmarkSourceId, benchmarkSourceLabel, bodyweightRelativeTarget, device, hand, latestBenchmark, onComplete, previousResult, profile, protocol, recommendation, resolvedTargetKg, sourceMaxKg, startedAtIso, targetMode]);
 
   const syncCompletedReps = useCallback((next: TrainRepResult[]) => {
     completedRepsRef.current = next;
@@ -345,7 +373,6 @@ export function GuidedTrainScreen({
     });
   });
 
-  const currentStep = currentStepIndex >= 0 ? timeline[currentStepIndex] : null;
   const remainingMs = Math.max(0, phaseDurationMs - (clockMs - phaseStartedAtMs));
   const remainingProgramMs = useMemo(() => {
     const futureMs = timeline

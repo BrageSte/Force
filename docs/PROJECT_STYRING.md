@@ -7,6 +7,7 @@ Denne fasen etablerer en web-first baseline som kan brukes trygt pa dagens Ardui
 I scope:
 
 - beholde eksisterende `web/` UI-struktur
+- tydeliggjore rollefordelingen der `LIVE` er for raske lokale maalinger og `TEST` er for formelle benchmarker
 - rydde repoet for lokale runtime-artefakter og utdaterte innganger
 - rydde transport- og kalibreringskontrakter
 - flytte delt domenelogikk til `packages/core`
@@ -84,6 +85,11 @@ Planlagt softwarearkitektur:
   - Status: aktiv
   - Dato: 2026-03-11
   - Begrunnelse: prosjektet trenger intern opprydding uten unodvendig UX-regresjon.
+
+- `LIVE` er quick-check flaten, mens `TEST` er benchmark-flaten.
+  - Status: aktiv
+  - Dato: 2026-03-16
+  - Begrunnelse: raske lokale maalinger og formell historikk skal ikke blandes i samme flyt.
 
 - `web/` er hovedretning videre.
   - Status: aktiv
