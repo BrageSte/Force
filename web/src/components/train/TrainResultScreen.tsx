@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR, displayOrder } from '../../constants/fingers.ts';
 import { annotateTrainReps, buildTrainSetDetails, type TrainSetDetail } from './trainResultAnalysis.ts';
+import { TrainRepCurvePanel } from './TrainRepCurvePanel.tsx';
 import { formatCategoryLabel } from './trainUtils.ts';
 import type { TrainSessionResult } from './types.ts';
 
@@ -350,6 +351,14 @@ function SetDetailPanel({
           />
         </div>
       </div>
+
+      {selectedSet.reps.length > 0 && (
+        <TrainRepCurvePanel
+          selectedSet={selectedSet}
+          targetKg={result.targetKg}
+          fingerOrder={fingerOrder}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         {fingerOrder.map(fingerIndex => {

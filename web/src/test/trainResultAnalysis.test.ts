@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildTrainRepCurveSummary } from '../components/analysis/forceCurveViewModel.ts';
 import { getTrainProtocolById } from '../components/train/trainLibrary.ts';
 import { annotateTrainReps, buildTrainSetDetails } from '../components/train/trainResultAnalysis.ts';
 import type { TrainRepResult } from '../components/train/types.ts';
@@ -69,5 +70,16 @@ describe('train result analysis', () => {
     expect(setDetails[1]?.summary.completedReps).toBe(1);
     expect(setDetails[1]?.summary.plannedReps).toBe(3);
     expect(setDetails[1]?.fingerSummaries[1]?.peakKg).toBeCloseTo(10);
+  });
+
+  it('builds rep-level curve summaries from stored rep samples', () => {
+    const rep = createRep(1, 1, 54);
+
+    const summary = buildTrainRepCurveSummary(rep, 50, 1);
+
+    expect(summary.repMetrics.peakTotalKg).toBe(54);
+    expect(summary.repMetrics.targetKg).toBe(50);
+    expect(summary.fingerMetrics.peakKg).toBeCloseTo(10);
+    expect(summary.fingerMetrics.rfd100KgS).toBeGreaterThan(0);
   });
 });
