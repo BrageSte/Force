@@ -1,204 +1,269 @@
 # Project Styring
 
-## Formaal
+## Dokumentrolle
 
-Denne fasen etablerer en web-first baseline som kan brukes trygt pa dagens Arduino UNO-oppsett samtidig som repoet ryddes for videre migrering til XIAO BLE og mobilapp.
+Dette dokumentet oversetter [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) til aktiv prosjektstyring for `v1.5`.
 
-I scope:
+Bruk det for:
 
-- beholde eksisterende `web/` UI-struktur
-- godkjenne og levere en `LIVE` first-screen redesign som samler connection hero, kompakt quick-mode rail, per-finger-first live-scene, delt live-graf og latest-result panel
-- tydeliggjore rollefordelingen der `LIVE` er for raske lokale maalinger og `TEST` er for formelle benchmarker
-- rydde repoet for lokale runtime-artefakter og utdaterte innganger
-- rydde transport- og kalibreringskontrakter
-- flytte delt domenelogikk til `packages/core`
-- dokumentere dagens og fremtidig hardware/software tydelig
-- holde repoet web-only og fjerne utfaset desktop-surface
+- scope og faseavgrensning
+- arkitekturretning og migreringsregler
+- aktive beslutninger og guardrails
+- risiko, akseptkriterier og milepaeler
 
-Utenfor scope i denne fasen:
+Nar dokumenter spriker, er `PROJECT_CONTEXT.md` og dette dokumentet den autoritative baseline for repoet.
 
-- full redesign av hele web-UI eller ny navigasjonsstruktur utenfor den godkjente `LIVE` first-screenen
-- faktisk BLE runtime i web
-- full XIAO firmwareimplementasjon
-- publisering av mobilapp
+Separate forretnings-, pitch- eller kommersialiseringsspor kan dokumenteres i tillegg, men de skal ikke erstatte denne baseline uten eksplisitt oppdatering her.
 
-Ekstern device-stotte som er tillatt i denne fasen:
+## 1. Styringsbaseline for `v1.5`
 
-- Tindeq Progressor kan brukes som BLE-basert total-force-enhet i `web/`
-- dette erstatter ikke `CURRENT_UNO_HX711`
-- per-finger analytics og protokoller skal fortsatt behandles som native-only
+Prosjektet styres etter disse faste punktene:
 
-## Naavaerende hardware
+- repoet er `web`-first
+- `web/` er eneste aktive operatorflate i dette repoet
+- `packages/core/` er felles domene- og kontraktslag
+- `firmware/` dekker dagens wired hardware-baseline
+- aktiv hardwareprofil er `CURRENT_UNO_HX711`
+- fremtidig maalprofil er `TARGET_XIAO_BLE_HX711`
+- Tindeq Progressor er tillatt som ekstern total-force-only enhet
+- produktet skilles tydelig mellom `LIVE`, `TEST` og `TRAIN`
+- Serial og fremtidig BLE skal mappe til samme logiske sample-kontrakt
 
-Aktiv hardwareprofil: `CURRENT_UNO_HX711`
+## 2. Scope i denne fasen
 
-Beskrivelse:
+I scope na:
+
+- beholde eksisterende `web/` informasjonsarkitektur som baseline
+- levere og stabilisere godkjent `LIVE` first-screen redesign
+- tydeliggjore rollefordelingen mellom `LIVE`, `TEST` og `TRAIN`
+- holde device- og metricslogikk capability-aware
+- flytte eller samle delt parsing-, kalibrerings-, metrics- og workoutlogikk i `packages/core`
+- rydde repo, dokumentasjon og onboarding for videre web/BLE-migrering
+- bevare secure-context krav for Web Serial og Web Bluetooth-kompatible flows
+
+## 3. Utenfor scope i denne fasen
+
+Ikke i scope na:
+
+- full redesign av hele web-UI eller ny navigasjonsstruktur utenfor godkjent `LIVE` first screen
+- produksjonsklar BLE-runtime i web
+- full implementasjon av `TARGET_XIAO_BLE_HX711`
+- native mobilapp
+- hosted backend eller synk som forutsetning for lokal maaling
+- ny desktop-surface eller alternativ operatorflate
+- e-commerce, CAD-automatisering eller 3D-print ordrelogikk som del av denne repo-baselinen
+
+Sistnevnte kan utforskes separat, men skal behandles som et eget strategispor til det eventuelt blir tatt inn i prosjektstyringen.
+
+## 4. Produktmodell
+
+Produktet skal behandles som tre tydelige flater:
+
+### `LIVE`
+
+- raske lokale maalinger
+- quick capture
+- connection flow og live visualisering
+- siste resultat og enkel session entry
+
+### `TEST`
+
+- formelle benchmarker
+- repeterbar maaling
+- score, analyse og historisk sammenligning
+
+### `TRAIN`
+
+- guidede okter
+- prescriptions og anbefalinger
+- treningsresultater og progresjon
+
+Styringsregel:
+
+- `LIVE` er for rask bruk her og na
+- `TEST` er for standardisert maaling
+- `TRAIN` bruker testgrunnlag, men skal ikke lagre resultater som benchmarker
+
+## 5. Navaerende baseline
+
+### Aktiv hardwareprofil
+
+`CURRENT_UNO_HX711`
+
+Bekreftet oppsett:
 
 - 1 x Arduino UNO
 - 4 x HX711
-- 4 x strain/load cell
-- USB serial til host-maskin
+- 4 x load cell / strain channels
+- USB serial mellom device og host
 
-Kontrakter:
-
-- firmware: `firmware/firmware.ino`
-- host sender kommandoer for tare, debug og stream-modus
-- aktiv sampletransport er newline-delimited serial tekst
-
-## Naavaerende software
-
-Aktive flater:
+### Aktiv softwareflate
 
 - `web/`
-  - primar produktflate videre
-  - Web Serial mot dagens hardware
-  - `LIVE` first screen kan redesignes innenfor denne fasen nar den holder seg til quick-check-rollen og bruker eksisterende `web/`/`packages/core` kontrakter
-  - ekstern BLE device-provider for Tindeq Progressor i total-force-modus
+  - aktiv produktflate
+  - browser-app med Web Serial i dag
+  - Tindeq-stotte for total-force-only capture
 - `packages/core/`
-  - felles TypeScript domene- og kontraktslag
+  - delt TypeScript logikk for parsing, kalibrering, smoothing, segmentering, metrics og workouts
+- `firmware/`
+  - Arduino-firmware for dagens wired setup
 
-Referanseflater:
-- ingen
+### Canonical runtime- og device-regler
 
-## Maalarkitektur
+- en forbindelse skal ha nøyaktig en aktiv stream-modus om gangen: `raw` eller `kg`
+- transporten er newline-delimited tekst
+- sample payloads kan vaere CSV med eller uten timestamp, eller JSON etter definert kontrakt
+- status- og debuglinjer starter med `#`
+- per-finger analytics skal bare vises nar device faktisk leverer per-finger data
 
-Maalprofil: `TARGET_XIAO_BLE_HX711`
+## 6. Maalarkitektur
 
-Planlagt fysisk oppsett:
+### Maalprofil
+
+`TARGET_XIAO_BLE_HX711`
+
+Planlagt hardware:
 
 - 1 x Seeed XIAO BLE nRF52840
 - 4 x HX711
-- 4 x load cell
+- 4 x load cells
 - 1 x 500 mAh LiPo
 - 1 x liten skyvebryter
-- 1 x felles GND/3V3-distribusjon pa liten perfboard
+- 1 x delt GND/3V3-distribusjon
 
-Planlagt softwarearkitektur:
+### Planlagt software-retning
 
-- firmware med samme logiske sample/command-kontrakt over Serial og BLE
-- delt domene i `packages/core`
-- web som fortsatt kan brukes mot Serial
-- native mobilapp som primar BLE-klient
-- eventuell webtjeneste senere for lagring/admin, men ikke som forutsetning for lokal maaling
+- firmware med samme logiske sample- og command-kontrakt over Serial og BLE
+- `packages/core` som fortsatt felles domene- og kontraktslag
+- `web/` som fungerende webflate for dagens Serial-baseline
+- native mobilapp senere som primar BLE-klient
+- eventuell webtjeneste senere for lagring, review eller admin
 
-## Beslutninger
+Migreringsregel:
 
-- Web-UI beholdes som baseline i denne fasen.
-  - Status: aktiv
-  - Dato: 2026-03-11
-  - Begrunnelse: prosjektet trenger intern opprydding uten unodvendig UX-regresjon.
+Ny firmware, nye klienter og framtidige BLE-flows skal alltid kunne spores tilbake til `CURRENT_UNO_HX711` og fremover til `TARGET_XIAO_BLE_HX711` uten ny, separat data-kontrakt.
 
-- `LIVE` er quick-check flaten, mens `TEST` er benchmark-flaten.
-  - Status: aktiv
-  - Dato: 2026-03-16
-  - Begrunnelse: raske lokale maalinger og formell historikk skal ikke blandes i samme flyt.
+## 7. Styringsregler og guardrails
 
-- `LIVE` first screen kan redesignes rundt connection hero, kompakt quick-mode rail, per-finger-first live-scene og total-force fallback.
-  - Status: aktiv
-  - Dato: 2026-03-17
-  - Begrunnelse: `CURRENT_UNO_HX711` sin unike verdi ligger i fire samtidige fingerkanaler, og `LIVE` skal vise dette tydelig uten a endre quick-capture-kontrakter eller formell `TEST`-flyt.
+Alle endringer i repoet skal holde disse reglene:
+
+- produktrettet arbeid skjer i `web/` og `packages/core/`
+- `web/`-strukturen bevares med mindre endringen retter bug, tydeliggjor kontrakt eller stotter migreringsarkitekturen
+- delt domenelogikk skal bo i `packages/core/`, ikke dupliseres i hver klient
+- hardwareprofiler skal refereres med profilnavn, ikke uformell fritekst
+- Tindeq Progressor behandles som ekstern total-force-device, ikke som alternativ full-fidelity hardwareprofil
+- total-force-only enheter skal ikke fa fake per-finger UI eller fake per-finger metrics
+- nye transportformat eller enhetskontrakter skal ikke innfores utenfor delt kjerne
+- secure-context krav for browser runtime ma forbli eksplisitte i docs og deployoppsett
+
+## 8. Aktive beslutninger
 
 - `web/` er hovedretning videre.
   - Status: aktiv
   - Dato: 2026-03-11
-  - Begrunnelse: browserbasert UI gir rask iterasjon mens mobil/BLE bygges senere.
+  - Begrunnelse: browserbasert UI gir rask iterasjon mens BLE og mobil bygges senere.
+
+- `LIVE` er quick-check-flaten, mens `TEST` er benchmark-flaten.
+  - Status: aktiv
+  - Dato: 2026-03-16
+  - Begrunnelse: raske maalinger og formelle benchmarker skal ikke blandes i samme brukerflyt.
+
+- `TRAIN` skal bygge pa benchmark- og profildata, men ikke lagre som testresultat.
+  - Status: aktiv
+  - Dato: 2026-03-17
+  - Begrunnelse: treningsgjennomforing og benchmarkhistorikk trenger ulike datamodeller og ulike brukerforventninger.
+
+- `LIVE` first screen kan redesignes rundt connection hero, quick-mode rail, per-finger-first live-scene og total-force fallback.
+  - Status: aktiv
+  - Dato: 2026-03-17
+  - Begrunnelse: native hardware sin unike verdi er fire samtidige fingerkanaler, og dette ma synes tydelig i live-bruk.
 
 - Den gamle desktop-surface er fjernet fra repoet.
   - Status: aktiv
   - Dato: 2026-03-16
-  - Begrunnelse: `web/` og `packages/core` dekker produktretningen, og repoet skal vaere klarere for deling, hosting og videre produktisering.
-
-- Repoet skal holdes fritt for lokale runtime-artefakter og byggeoutput.
-  - Status: aktiv
-  - Dato: 2026-03-15
-  - Begrunnelse: GitHub- og produktklar repo-struktur er viktig nar `web/` er den delbare hovedflaten.
+  - Begrunnelse: repoet skal vaere web-only i denne fasen.
 
 - Shared domain logic skal ligge i `packages/core`.
   - Status: aktiv
   - Dato: 2026-03-11
-  - Begrunnelse: reduserer duplisering og holder serial/BLE/mobile/web pa samme kontrakt.
+  - Begrunnelse: samme tall og kontrakter skal kunne brukes pa tvers av Serial, simulator, Tindeq og senere BLE/mobile.
 
-- En transportforbindelse skal ha kun en eksplisitt aktiv stream-modus om gangen.
+- E-commerce- og custom-produktlogikk holdes utenfor denne baselinen til det er eksplisitt tatt inn som eget scope.
   - Status: aktiv
-  - Dato: 2026-03-11
-  - Begrunnelse: fjerner uklarhet mellom `kg`-stream, `raw`-stream og klient-side kalibrering.
+  - Dato: 2026-03-17
+  - Begrunnelse: repoet er i dag et maalings- og treningsprodukt, ikke en ordre- og produksjonsplattform.
 
-- Hardware- og firmwarebeslutninger skal referere til hardwareprofilnavn, ikke fritekst.
-  - Status: aktiv
-  - Dato: 2026-03-11
-  - Begrunnelse: hindrer at dagens UNO-oppsett og framtidig XIAO-oppsett blandes sammen.
+## 9. Aapne spoersmaal
 
-- Tindeq Progressor skal behandles som ekstern total-force-device, ikke som alternativ hardwareprofil.
-  - Status: aktiv
-  - Dato: 2026-03-16
-  - Begrunnelse: holder `CURRENT_UNO_HX711` som full-fidelity per-finger baseline mens total-force-only workflows kan brukes uten native hardware.
+- Hvordan XIAO best handterer GPIO-, timing- og stroembehov for 4 x HX711.
+- Om BLE-protokollen skal vaere ren tekst som Serial, eller binar payload med adapter i klientlaget.
+- Hvilken mobilstack som egner seg best for senere BLE-klient.
+- Hvordan batteristatus, sleep, reconnect og firmware-update skal eksponeres i framtidige klienter.
+- Hvilke deler av dagens `web/src/analytics` som fortsatt skal flyttes inn i `packages/core`.
 
-## Aapne spoersmaal
+## 10. Risikoer og tiltak
 
-- Hvordan GPIO- og strømoppsettet pa XIAO best håndterer 4 x HX711 uten a skape pin- eller strømbegrensninger.
-- Om BLE-protokollen skal vaere ren tekst som Serial, eller en binar payload med tekstkompatibel adapter i klientlaget.
-- Hvordan mobilappen skal distribueres teknisk:
-  - React Native/Expo
-  - Flutter
-  - eller annen native BLE-stack
-- Hvordan batteristatus, sleep, reconnect og firmware update skal eksponeres i en framtidig mobilflate.
-
-## Risikoer
-
-- Risiko: analytics blir duplisert direkte i `web/` i stedet for `packages/core`.
-  - Konsekvens: ulike tall mellom skjermer og framtidige klienter.
+- Risiko: domenelogikk blir duplisert mellom `web/` og `packages/core`.
+  - Konsekvens: ulike tall mellom skjermer og klienter.
   - Sannsynlighet: middels.
-  - Tiltak: all ny domenelogikk flyttes til `packages/core`, og web bygger videre pa delte kontrakter.
+  - Tiltak: flytt felles parser-, metrics-, analyse- og workoutlogikk til `packages/core`.
 
-- Risiko: bruker tror `MODE_KG_DIRECT` og `MODE_RAW` betyr det samme.
+- Risiko: bruker blander `MODE_KG_DIRECT` og `MODE_RAW`.
   - Konsekvens: feilkalibrering eller misvisende kraftverdier.
   - Sannsynlighet: middels.
-  - Tiltak: tydelig settings-tekst, eksplisitt stream mode, auto-switch ved tydelige raw-counts.
+  - Tiltak: tydelig settings-tekst, eksplisitt stream mode og testdekning for begge modi.
 
-- Risiko: visuell noise-gating skjuler reelle onset-data i tester.
-  - Konsekvens: feil RFD/tidlig fase-metrikker.
+- Risiko: total-force-only device far UI eller analyser som later som de er per-finger-aware.
+  - Konsekvens: misvisende feedback og feil treningsanbefalinger.
   - Sannsynlighet: middels.
-  - Tiltak: skill mellom displaydata og measured/captured data.
+  - Tiltak: capability gating i baade dataflyt, analyse og UI.
 
-- Risiko: BLE-planlegging starter uten at dagens kontrakt er stabil.
-  - Konsekvens: ny duplisering og flere migreringslag.
+- Risiko: BLE-planlegging starter for sample-kontrakten er stabil.
+  - Konsekvens: unodige adapterlag og ny duplisering.
   - Sannsynlighet: middels.
-  - Tiltak: kontrakt og delt kjerne ferdigstilles for Serial forst.
+  - Tiltak: ferdigstill og test delt kontrakt rundt dagens Serial-path forst.
 
-## Test- og akseptkriterier
+## 11. Test- og akseptkriterier
 
-Fasen er godkjent nar:
+Denne fasen er godkjent nar:
 
-- `web/` fungerer fortsatt mot dagens `CURRENT_UNO_HX711`-oppsett.
-- Overordnet webstruktur og navigasjon er fortsatt stabil; `LIVE` har den godkjente first-screen redesignen.
-- `LIVE` viser connection hero, kompakt quick-mode rail, per-finger live-scene pa native hardware og total-force fallback pa Tindeq.
-- README og styringsdokumenter peker nye brukere til `web/`.
-- Domenelogikk for parsing, kalibrering, smoothing, segmentering, metrics og session analysis er flyttet til `packages/core`.
-- Repoet har `AGENTS.md`, `PROJECT_CONTEXT.md` og dette styringsdokumentet pa plass.
-- Web har automatiske tester for parser, settings-normalisering, raw/kg-modus og lagring.
-- Repoet inneholder ikke utfaset desktop-app eller desktop-spesifikke instruksjoner.
+- `web/` fortsatt fungerer mot `CURRENT_UNO_HX711`
+- overordnet webstruktur er stabil, med godkjent `LIVE` first-screen redesign
+- `LIVE` viser connection hero, quick-mode rail, per-finger live-scene pa native hardware og total-force fallback pa Tindeq
+- `README.md`, `PROJECT_CONTEXT.md`, `REPO_MAP.md` og dette dokumentet peker nye brukere til riktig baseline
+- parsing, kalibrering, metrics og workoutregler er forankret i `packages/core` eller tydelig under flytting dit
+- repoet ikke inneholder utfaset desktop-surface eller desktop-spesifikke instrukser
+- web har automatisk testdekning for parser, capability gating, settings og sentrale live/test/train flows
 
-Manuell verifisering som kreves senere pa fysisk hardware:
+Manuell hardware-verifisering som fortsatt kreves:
 
 - Serial connect/disconnect
 - tare
-- kg-stream
-- raw-stream
-- testflyt
+- `kg`-stream
+- `raw`-stream
+- benchmark-flyt
+- train-flyt
 - session save/export
 
-## Milepaeler
+## 12. Milepaeler
 
-- Milepael 1: stabil web/core kontrakt pa dagens UNO serial-oppsett
-- Milepael 2: ren web-only repo- og deploy-baseline
-- Milepael 3: XIAO firmware spike med samme command/sample-kontrakt
-- Milepael 4: BLE-klient i mobilapp
-- Milepael 5: eventuell webtjeneste og synk/admin-funksjoner
+- Milepael 1: stabil Serial- og core-baseline pa `CURRENT_UNO_HX711`
+- Milepael 2: tydelig web-only repo- og dokumentasjonsbaseline
+- Milepael 3: ferdig capability-aware LIVE/TEST/TRAIN-opplevelse i web
+- Milepael 4: XIAO firmware spike med samme logiske kontrakt
+- Milepael 5: native BLE-klient
+- Milepael 6: eventuell lagrings-, review- eller adminflate senere
 
-## Endringslogg
+## 13. Relaterte dokumenter
 
-- 2026-03-11: Opprettet formell styringsbaseline for web-first migrering.
-- 2026-03-11: Formaliserte hardwareprofilene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
-- 2026-03-15: Ryddet repoet for lokale runtime-artefakter og tydeliggjorde `web/` som eneste aktive produktflate.
-- 2026-03-16: Fjernet utfaset desktop-surface fra repoet og oppdaterte dokumentasjonen til web-only baseline.
-- 2026-03-17: Godkjente `LIVE` first-screen redesign rundt connection hero, quick-mode rail, per-finger live-scene og total-force fallback.
+- [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md)
+- [REPO_MAP.md](../REPO_MAP.md)
+- [BENCHMARK_WORKOUT_ENGINE.md](./BENCHMARK_WORKOUT_ENGINE.md)
+- [TRAINING_PROTOCOL_DESIGN.md](./TRAINING_PROTOCOL_DESIGN.md)
+
+## 14. Endringslogg
+
+- 2026-03-11: Opprettet web-first styringsbaseline for `v1.5`.
+- 2026-03-16: Fjernet desktop-surface og formaliserte Tindeq som ekstern total-force-device.
+- 2026-03-17: Godkjente `LIVE` first-screen redesign.
+- 2026-03-17: Restrukturerte styringsdokumentet for tydeligere scope, guardrails og dokumentflyt.

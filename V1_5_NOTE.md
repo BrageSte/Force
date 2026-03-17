@@ -22,3 +22,4 @@ Read order for work in this repository:
 2. [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md)
 3. [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md)
 4. [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md)
+5. [REPO_MAP.md](REPO_MAP.md)

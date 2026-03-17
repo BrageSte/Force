@@ -2,7 +2,7 @@
 
 Krimblokk is a four-channel finger-force measurement system for structured testing, live capture, guided training, and session review. This repository is now web-only: `web/` is the product surface, `packages/core/` holds shared domain logic, and `firmware/` contains the Arduino firmware for the current wired hardware.
 
-Start with [V1_5_NOTE.md](V1_5_NOTE.md), then read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture and roadmap direction, read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training behavior are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md).
+Start with [V1_5_NOTE.md](V1_5_NOTE.md), then read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture and roadmap direction, read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training behavior are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md). For faster repo navigation, use [REPO_MAP.md](REPO_MAP.md).
 
 ## Current Product Baseline
 
