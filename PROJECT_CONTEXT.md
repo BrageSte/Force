@@ -50,6 +50,8 @@ Current firmware assumptions:
   - active UI baseline and primary direction
   - runs in browser with Web Serial today
   - `LIVE` is the quick-check surface for local monitoring and short captures
+  - `LIVE` first screen is approved to prioritize a connection hero, compact quick-mode rail, per-finger-first live scene, shared live graph, and latest-result summary
+  - Tindeq and other total-force-only devices must fall back to a total-force live scene without fake per-finger cards
   - `TEST` is the formal benchmark and serious tracking surface
   - supports hosted deployment as a secure-context web app
 - `packages/core/`
@@ -136,7 +138,7 @@ Status/debug lines:
 
 ## Current Non-Negotiable Direction
 
-- Keep the current `web/` UI structure stable while cleaning up internals.
+- Keep the overall `web/` information architecture stable while allowing the approved `LIVE` first-screen redesign.
 - Do not invent new transport contracts outside the shared core package.
 - Future hardware/software migration must map back to `CURRENT_UNO_HX711` and forward to `TARGET_XIAO_BLE_HX711`.
 - New product-facing work belongs in `web/` and `packages/core`.

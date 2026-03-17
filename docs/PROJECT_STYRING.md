@@ -7,6 +7,7 @@ Denne fasen etablerer en web-first baseline som kan brukes trygt pa dagens Ardui
 I scope:
 
 - beholde eksisterende `web/` UI-struktur
+- godkjenne og levere en `LIVE` first-screen redesign som samler connection hero, kompakt quick-mode rail, per-finger-first live-scene, delt live-graf og latest-result panel
 - tydeliggjore rollefordelingen der `LIVE` er for raske lokale maalinger og `TEST` er for formelle benchmarker
 - rydde repoet for lokale runtime-artefakter og utdaterte innganger
 - rydde transport- og kalibreringskontrakter
@@ -16,7 +17,7 @@ I scope:
 
 Utenfor scope i denne fasen:
 
-- redesign av web-UI
+- full redesign av hele web-UI eller ny navigasjonsstruktur utenfor den godkjente `LIVE` first-screenen
 - faktisk BLE runtime i web
 - full XIAO firmwareimplementasjon
 - publisering av mobilapp
@@ -51,6 +52,7 @@ Aktive flater:
 - `web/`
   - primar produktflate videre
   - Web Serial mot dagens hardware
+  - `LIVE` first screen kan redesignes innenfor denne fasen nar den holder seg til quick-check-rollen og bruker eksisterende `web/`/`packages/core` kontrakter
   - ekstern BLE device-provider for Tindeq Progressor i total-force-modus
 - `packages/core/`
   - felles TypeScript domene- og kontraktslag
@@ -90,6 +92,11 @@ Planlagt softwarearkitektur:
   - Status: aktiv
   - Dato: 2026-03-16
   - Begrunnelse: raske lokale maalinger og formell historikk skal ikke blandes i samme flyt.
+
+- `LIVE` first screen kan redesignes rundt connection hero, kompakt quick-mode rail, per-finger-first live-scene og total-force fallback.
+  - Status: aktiv
+  - Dato: 2026-03-17
+  - Begrunnelse: `CURRENT_UNO_HX711` sin unike verdi ligger i fire samtidige fingerkanaler, og `LIVE` skal vise dette tydelig uten a endre quick-capture-kontrakter eller formell `TEST`-flyt.
 
 - `web/` er hovedretning videre.
   - Status: aktiv
@@ -163,7 +170,8 @@ Planlagt softwarearkitektur:
 Fasen er godkjent nar:
 
 - `web/` fungerer fortsatt mot dagens `CURRENT_UNO_HX711`-oppsett.
-- Hovedsider og navigasjon i web er ikke redesignet.
+- Overordnet webstruktur og navigasjon er fortsatt stabil; `LIVE` har den godkjente first-screen redesignen.
+- `LIVE` viser connection hero, kompakt quick-mode rail, per-finger live-scene pa native hardware og total-force fallback pa Tindeq.
 - README og styringsdokumenter peker nye brukere til `web/`.
 - Domenelogikk for parsing, kalibrering, smoothing, segmentering, metrics og session analysis er flyttet til `packages/core`.
 - Repoet har `AGENTS.md`, `PROJECT_CONTEXT.md` og dette styringsdokumentet pa plass.
@@ -193,3 +201,4 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 - 2026-03-11: Formaliserte hardwareprofilene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
 - 2026-03-15: Ryddet repoet for lokale runtime-artefakter og tydeliggjorde `web/` som eneste aktive produktflate.
 - 2026-03-16: Fjernet utfaset desktop-surface fra repoet og oppdaterte dokumentasjonen til web-only baseline.
+- 2026-03-17: Godkjente `LIVE` first-screen redesign rundt connection hero, quick-mode rail, per-finger live-scene og total-force fallback.

@@ -3,6 +3,7 @@ import uPlot from 'uplot';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { FINGER_NAMES, FINGER_COLORS, TOTAL_COLOR } from '../../constants/fingers.ts';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
+import { SHOW_ALL_FINGER_SERIES, type ForceChartSeriesVisibility } from './liveSeries.ts';
 
 const EMPTY_DATA: uPlot.AlignedData = [
   new Float64Array(0),
@@ -15,6 +16,7 @@ const EMPTY_DATA: uPlot.AlignedData = [
 
 interface ForceChartProps {
   variant?: 'balanced' | 'total_focus' | 'per_finger_focus';
+  seriesVisibility?: ForceChartSeriesVisibility;
 }
 
 function fingerSeriesStyle(index: number, variant: ForceChartProps['variant']) {
@@ -41,10 +43,15 @@ function fingerSeriesStyle(index: number, variant: ForceChartProps['variant']) {
   };
 }
 
-export function ForceChart({ variant = 'balanced' }: ForceChartProps) {
+export function ForceChart({
+  variant = 'balanced',
+  seriesVisibility = { total: true, fingers: SHOW_ALL_FINGER_SERIES },
+}: ForceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const lastRenderedPos = useRef(0);
+  const fingerVisibility = seriesVisibility.fingers ?? SHOW_ALL_FINGER_SERIES;
+  const totalVisible = seriesVisibility.total ?? true;
 
   // Build uPlot once
   useEffect(() => {
@@ -79,11 +86,16 @@ export function ForceChart({ variant = 'balanced' }: ForceChartProps) {
       ],
       series: [
         {},
-        { label: 'Total', stroke: TOTAL_COLOR, width: variant === 'per_finger_focus' ? 2 : 3 },
-        fingerSeriesStyle(0, variant),
-        fingerSeriesStyle(1, variant),
-        fingerSeriesStyle(2, variant),
-        fingerSeriesStyle(3, variant),
+        {
+          label: 'Total',
+          stroke: TOTAL_COLOR,
+          width: variant === 'per_finger_focus' ? 2 : 3,
+          show: totalVisible,
+        },
+        { ...fingerSeriesStyle(0, variant), show: fingerVisibility[0] },
+        { ...fingerSeriesStyle(1, variant), show: fingerVisibility[1] },
+        { ...fingerSeriesStyle(2, variant), show: fingerVisibility[2] },
+        { ...fingerSeriesStyle(3, variant), show: fingerVisibility[3] },
       ],
     };
 
@@ -101,7 +113,14 @@ export function ForceChart({ variant = 'balanced' }: ForceChartProps) {
       plot.destroy();
       plotRef.current = null;
     };
-  }, [variant]);
+  }, [
+    variant,
+    totalVisible,
+    fingerVisibility[0],
+    fingerVisibility[1],
+    fingerVisibility[2],
+    fingerVisibility[3],
+  ]);
 
   // RAF-synced data push
   useAnimationFrame(() => {

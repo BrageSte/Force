@@ -97,6 +97,7 @@ interface LiveState {
   clearEffortAccum: () => void;
   setMeasurementHandOverride: (hand: Hand | null) => void;
   setBufferSeconds: (seconds: number) => void;
+  resetLiveDashboard: () => void;
   resetSession: () => void;
 }
 
@@ -347,6 +348,38 @@ export const useLiveStore = create<LiveState>((set, get) => ({
       bufferLength: 0,
     });
   },
+
+  resetLiveDashboard: () => set(state => ({
+    writePos: 0,
+    bufferLength: 0,
+    currentEffort: null,
+    lastEffort: null,
+    latestRaw: null,
+    latestChannelRaw: null,
+    latestMeasuredKg: null,
+    latestMeasuredTotalKg: 0,
+    latestMeasuredPct: null,
+    latestKg: null,
+    latestTotalKg: 0,
+    latestPct: null,
+    recording: false,
+    recordedSamples: [],
+    recordedEfforts: [],
+    recordingStartedIso: null,
+    recordingHand: null,
+    quickMeasurePresetId: state.quickMeasurePresetId,
+    customDashboardMetrics: state.customDashboardMetrics,
+    quickCapture: createIdleQuickCaptureState(),
+    quickCaptureSamples: [],
+    quickResult: null,
+    quickLivePeakTotalKg: 0,
+    quickLivePeakPerFingerKg: null,
+    currentEffortSamples: [],
+    _recentTimes: [],
+    hasMeaningfulLoad: false,
+    tareRequired: false,
+    sampleRateHz: 0,
+  })),
 
   resetSession: () => set({
     writePos: 0,
