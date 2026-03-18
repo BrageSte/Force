@@ -35,6 +35,7 @@ import type {
   TrainWorkoutKind,
 } from './types.ts';
 import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
 
 type TrainPageView = 'library' | 'guided' | 'results';
 
@@ -74,6 +75,8 @@ export function TrainPage() {
   const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
   const deviceConnected = useDeviceStore(s => s.connected);
   const sourceKind = useDeviceStore(s => s.sourceKind);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
   const [view, setView] = useState<TrainPageView>('library');
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<TrainWorkoutId>('strength_10s');
   const [selectedWorkoutKind, setSelectedWorkoutKind] = useState<TrainWorkoutKind>('builtin');
@@ -152,8 +155,13 @@ export function TrainPage() {
   );
 
   const workoutStartBlockReason = useMemo(
-    () => capabilityBlockReason(selectedWorkout.capabilityRequirements, selectedDeviceCapabilities),
-    [selectedDeviceCapabilities, selectedWorkout.capabilityRequirements],
+    () => {
+      if ((verificationStatus === 'checking' || verificationStatus === 'critical') && verificationReason) {
+        return verificationReason;
+      }
+      return capabilityBlockReason(selectedWorkout.capabilityRequirements, selectedDeviceCapabilities);
+    },
+    [selectedDeviceCapabilities, selectedWorkout.capabilityRequirements, verificationReason, verificationStatus],
   );
   const simulatorProfiles = useMemo(() => ({
     Left: resolveSimulatorAthleteContext({ profile: activeProfile, results: profileTests, hand: 'Left' }),

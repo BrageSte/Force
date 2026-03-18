@@ -9,3 +9,4 @@ export * from './curveAnalysis.ts';
 export * from './sessionAnalyzer.ts';
 export * from './deviceCommands.ts';
 export * from './workouts.ts';
+export * from './verification.ts';

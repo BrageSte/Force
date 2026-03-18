@@ -2,6 +2,7 @@ import { analyzeSession, type SessionPayload } from '@krimblokk/core';
 import { useAppStore } from '../stores/appStore.ts';
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
+import { useVerificationStore } from '../stores/verificationStore.ts';
 import { toProfileSnapshot } from '../types/profile.ts';
 import { defaultConnectedDevice } from '../device/deviceProfiles.ts';
 
@@ -12,7 +13,17 @@ export function sendTareCommand(statusMessage = 'Tare command sent'): void {
 
 export async function saveCurrentRecordingAsSession(): Promise<SessionPayload | null> {
   const live = useLiveStore.getState();
+  const verification = useVerificationStore.getState().snapshot;
+  const verificationReason = useVerificationStore.getState().blockReason;
   live.stopRecording();
+
+  if ((verification.status === 'checking' || verification.status === 'critical') && verificationReason) {
+    useLiveStore.getState().discardRecording();
+    useDeviceStore.getState().addStatus(
+      `Recording discarded: ${verificationReason}`,
+    );
+    return null;
+  }
 
   if (live.recordedSamples.length < 2) {
     useDeviceStore.getState().addStatus('Recording discarded: not enough samples');

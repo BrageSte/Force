@@ -9,6 +9,7 @@ import {
 } from '../../profile/benchmarkReferences.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
 import type { Finger4, Hand, ProfileSnapshot } from '../../types/force.ts';
 import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import { buildTrainSimulatorState } from '../../device/simulatorModel.ts';
@@ -16,6 +17,7 @@ import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
 import type { CompletedTestResult } from '../test/types.ts';
 import { useAudioCuePlayer } from '../test/guided/audioCues.ts';
 import { buildTrainSessionResult, buildTrainTimeline, formatGripSpec, plannedRepCount, scoreRepAdherence } from './trainUtils.ts';
+import { verificationAllowsLiveDisplay } from '@krimblokk/core';
 import type {
   CustomTrainWorkout,
   TrainProtocol,
@@ -86,8 +88,12 @@ export function GuidedTrainScreen({
   const connected = useDeviceStore(s => s.connected);
   const sourceKind = useDeviceStore(s => s.sourceKind);
   const activeDevice = useDeviceStore(s => s.activeDevice);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
   const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
   const device = activeDevice ?? defaultConnectedDevice(sourceKind);
+  const verificationLiveAllowed = verificationAllowsLiveDisplay(verificationStatus);
+  const verificationBlocked = !verificationLiveAllowed && Boolean(verificationReason);
 
   const timeline = useMemo(() => buildTrainTimeline(protocol.blocks), [protocol.blocks]);
   const totalPlannedReps = useMemo(() => plannedRepCount(protocol.blocks), [protocol.blocks]);
@@ -101,6 +107,7 @@ export function GuidedTrainScreen({
   const [completedReps, setCompletedReps] = useState<TrainRepResult[]>([]);
   const [startedAtIso, setStartedAtIso] = useState<string | null>(null);
   const [resolvedTargetKg, setResolvedTargetKg] = useState(targetKg);
+  const [verificationAbortReason, setVerificationAbortReason] = useState<string | null>(null);
   const liveForceLabel = targetMode === 'manual'
     ? 'Manual target'
     : targetMode === 'auto_from_first_set'
@@ -362,8 +369,17 @@ export function GuidedTrainScreen({
     previousPhaseRef.current = phase;
   }, [phase, playGoCue, playStopCue]);
 
+  useEffect(() => {
+    if (!verificationBlocked || verificationStatus !== 'critical') return;
+    if (phase === 'finished' || phase === 'ready') return;
+    setVerificationAbortReason(verificationReason ?? 'Runtime verification failed during the active workout.');
+    setPhase('finished');
+    setPhaseDurationMs(0);
+    useDeviceStore.getState().addStatus(`Guided workout aborted: ${verificationReason ?? 'runtime verification failed.'}`);
+  }, [phase, verificationBlocked, verificationReason, verificationStatus]);
+
   useAnimationFrame(() => {
-    if (!['warmup', 'work', 'cooldown'].includes(phaseRef.current)) return;
+    if (!['warmup', 'work', 'cooldown'].includes(phaseRef.current) || verificationBlocked) return;
     const elapsedMs = performance.now() - phaseStartedAtMsRef.current;
     if (elapsedMs - lastCaptureMsRef.current < 16) return;
     lastCaptureMsRef.current = elapsedMs;
@@ -424,6 +440,14 @@ export function GuidedTrainScreen({
         </div>
       )}
 
+      {verificationAbortReason && (
+        <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className="text-xs uppercase tracking-wide">Verification Failed</div>
+          <div className="mt-2 font-semibold text-text">This workout was aborted before any result could be saved.</div>
+          <div className="mt-2">{verificationAbortReason}</div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
         <div className="bg-surface rounded-xl border border-border p-5 space-y-5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -455,7 +479,7 @@ export function GuidedTrainScreen({
               {phase === 'ready' && (
                 <button
                   onClick={handleStart}
-                  disabled={!connected}
+                  disabled={!connected || verificationBlocked}
                   className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white disabled:opacity-30"
                 >
                   Start Workout
@@ -471,23 +495,31 @@ export function GuidedTrainScreen({
             <div className="space-y-3">
               <div className="rounded-xl border border-border bg-surface-alt p-4">
                 <div className="text-xs uppercase tracking-wide text-muted">Live Force</div>
-                <div className="text-5xl font-black tabular-nums mt-2" style={{ color: '#60a5fa' }}>
-                  {latestMeasuredTotalKg.toFixed(1)}
-                </div>
-                <div className="text-xs text-muted mt-1">
-                  {liveForceLabel}
-                </div>
-                <div className="mt-3">
-                  <TargetBandGauge value={latestMeasuredTotalKg} targetKg={resolvedTargetKg > 0 ? resolvedTargetKg : targetKg} disabled={targetMode === 'auto_from_first_set' && resolvedTargetKg <= 0} />
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                  <span>Benchmark</span>
-                  <span>{benchmarkSourceLabel ?? latestBenchmark?.protocolName ?? 'Manual / custom'}</span>
-                </div>
-                {liveForceReferenceDetail && (
-                  <div className="mt-2 text-xs text-muted">
-                    Reference: {liveForceReferenceDetail}
+                {verificationBlocked ? (
+                  <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger">
+                    {verificationReason ?? 'Waiting for runtime verification to complete.'}
                   </div>
+                ) : (
+                  <>
+                    <div className="text-5xl font-black tabular-nums mt-2" style={{ color: '#60a5fa' }}>
+                      {latestMeasuredTotalKg.toFixed(1)}
+                    </div>
+                    <div className="text-xs text-muted mt-1">
+                      {liveForceLabel}
+                    </div>
+                    <div className="mt-3">
+                      <TargetBandGauge value={latestMeasuredTotalKg} targetKg={resolvedTargetKg > 0 ? resolvedTargetKg : targetKg} disabled={targetMode === 'auto_from_first_set' && resolvedTargetKg <= 0} />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                      <span>Benchmark</span>
+                      <span>{benchmarkSourceLabel ?? latestBenchmark?.protocolName ?? 'Manual / custom'}</span>
+                    </div>
+                    {liveForceReferenceDetail && (
+                      <div className="mt-2 text-xs text-muted">
+                        Reference: {liveForceReferenceDetail}
+                      </div>
+                    )}
+                  </>
                 )}
                 <button onClick={() => sendTareCommand('Tare command sent from v1.5 train runner')} disabled={!connected || phase === 'work'} className="mt-3 w-full px-3 py-2 rounded-lg text-sm font-semibold bg-surface border border-border text-text disabled:opacity-30">
                   Tare
@@ -520,7 +552,11 @@ export function GuidedTrainScreen({
                 </span>
               )}
             </div>
-            {perFingerForce ? (
+            {verificationBlocked ? (
+              <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger">
+                Live finger contribution is hidden until runtime verification passes.
+              </div>
+            ) : perFingerForce ? (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                 {fingerOrder.map(index => (
                   <FingerMeter

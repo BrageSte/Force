@@ -1,11 +1,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createVerificationSnapshot } from '@krimblokk/core'
 import type { ForceSample } from '../types/force.ts'
 import { LivePage } from '../components/live/LivePage.tsx'
 import { useAppStore } from '../stores/appStore.ts'
 import { useDeviceStore } from '../stores/deviceStore.ts'
 import { useLiveStore } from '../stores/liveStore.ts'
+import { useVerificationStore } from '../stores/verificationStore.ts'
 import { resetAllStores } from './testUtils.ts'
 
 vi.mock('../hooks/useAnimationFrame.ts', () => ({
@@ -132,6 +134,28 @@ describe('LivePage', () => {
     expect(container.textContent).toContain('CURRENT_UNO_HX711')
     expect(container.textContent).toContain('Total Force Live')
     expect(container.querySelectorAll('[data-finger-card]')).toHaveLength(0)
+  })
+
+  it('shows a blocked verification state and hides live values', async () => {
+    useDeviceStore.setState({
+      sourceKind: 'Serial',
+      connected: true,
+      connectionState: 'connected',
+    })
+    useVerificationStore.setState({
+      snapshot: createVerificationSnapshot('critical', [], 'Waiting for firmware to confirm KG mode.'),
+      blockReason: 'Waiting for firmware to confirm KG mode.',
+    })
+
+    await act(async () => {
+      root.render(<LivePage />)
+    })
+
+    expect(container.textContent).toContain('Blocked')
+    expect(container.textContent).toContain('Waiting for firmware to confirm KG mode.')
+    expect(container.textContent).toContain('Live force values are hidden until the stream is verified again.')
+    expect(container.querySelectorAll('[data-finger-card]')).toHaveLength(0)
+    expect(buttonByText(container, 'Record Session').disabled).toBe(true)
   })
 
   it('shows pull-only mini trends and clears them after reset', async () => {

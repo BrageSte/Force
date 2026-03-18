@@ -81,6 +81,7 @@ interface LiveState {
   setLastEffort: (e: EffortMetrics | null) => void;
   startRecording: (hand: Hand) => void;
   stopRecording: () => void;
+  discardRecording: () => void;
   appendRecordedSample: (s: ForceSample) => void;
   addRecordedEffort: (e: EffortMetrics) => void;
   setQuickMeasurePreset: (presetId: LiveMeasurePresetId) => void;
@@ -243,6 +244,14 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   },
 
   stopRecording: () => set({ recording: false }),
+
+  discardRecording: () => set({
+    recording: false,
+    recordedSamples: [],
+    recordedEfforts: [],
+    recordingStartedIso: null,
+    recordingHand: null,
+  }),
 
   appendRecordedSample: (s) => set(state => ({
     recordedSamples: [...state.recordedSamples, s],

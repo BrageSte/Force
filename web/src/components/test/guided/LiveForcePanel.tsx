@@ -9,6 +9,8 @@ interface LiveForcePanelProps {
   canTare: boolean;
   hasMeaningfulLoad: boolean;
   perFingerForce: boolean;
+  verificationBlocked: boolean;
+  verificationReason: string | null;
   onTare: () => void;
 }
 
@@ -20,9 +22,21 @@ export function LiveForcePanel({
   canTare,
   hasMeaningfulLoad,
   perFingerForce,
+  verificationBlocked,
+  verificationReason,
   onTare,
 }: LiveForcePanelProps) {
   const order = displayFingerOrder(hand);
+
+  if (verificationBlocked) {
+    return (
+      <div className="bg-surface rounded-xl border border-danger/30 p-4 text-danger">
+        <div className="text-xs uppercase tracking-wide">Live Force</div>
+        <div className="mt-2 text-lg font-semibold text-text">Live force is hidden until runtime verification passes.</div>
+        <div className="mt-2 text-sm">{verificationReason ?? 'Waiting for a verified stream.'}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface rounded-xl border border-border p-4">

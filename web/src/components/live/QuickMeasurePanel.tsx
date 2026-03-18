@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { pipeline } from '../../pipeline/SamplePipeline.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
-import type { SourceKind } from '../../types/settings.ts';
-import { sendTareCommand } from '../../live/sessionWorkflow.ts';
 import {
   QUICK_MEASURE_PRESETS,
   availableCustomDashboardMetrics,
@@ -15,6 +13,8 @@ import {
   quickMeasureBlockReason,
 } from '../../live/quickMeasure.ts';
 import { DevicePickerModal } from '../device/DevicePickerModal.tsx';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
+import { useDeviceConnectionControls } from '../../hooks/useDeviceConnectionControls.ts';
 
 function arraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((item, index) => item === b[index]);
@@ -29,8 +29,6 @@ function presetModeLabel(presetId: ReturnType<typeof getQuickMeasureDefinition>[
 
 export function QuickMeasurePanel() {
   const hand = useAppStore(s => s.hand);
-  const connected = useDeviceStore(s => s.connected);
-  const sourceKind = useDeviceStore(s => s.sourceKind);
   const activeDevice = useDeviceStore(s => s.activeDevice);
   const recording = useLiveStore(s => s.recording);
   const measurementHandOverride = useLiveStore(s => s.measurementHandOverride);
@@ -45,8 +43,16 @@ export function QuickMeasurePanel() {
   const armQuickCapture = useLiveStore(s => s.armQuickCapture);
   const cancelQuickCapture = useLiveStore(s => s.cancelQuickCapture);
   const clearQuickMeasureRuntime = useLiveStore(s => s.clearQuickMeasureRuntime);
-  const updateSettings = useAppStore(s => s.updateSettings);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
+  const {
+    connected,
+    pickerOpen,
+    setPickerOpen,
+    sourceKind,
+    handleConnectToggle,
+    handleSourceChange,
+  } = useDeviceConnectionControls();
 
   const device = activeDevice ?? defaultConnectedDevice(sourceKind);
   const activePreset = getQuickMeasureDefinition(quickMeasurePresetId);
@@ -88,36 +94,13 @@ export function QuickMeasurePanel() {
     );
   };
 
-  const handleConnect = async () => {
-    const selectedSource = useDeviceStore.getState().sourceKind;
-
-    try {
-      await pipeline.connect();
-
-      if (selectedSource === 'Serial') {
-        const shouldTare = window.confirm('Serial connected. Tare with no load now?');
-        if (shouldTare) {
-          sendTareCommand('Auto tare command sent');
-        }
-      }
-    } catch (err) {
-      useDeviceStore.getState().addStatus(`Connection failed: ${String(err)}`);
-      pipeline.disconnect();
-    }
-  };
-
-  const handleSourceChange = (kind: SourceKind) => {
-    if (connected) return;
-    useDeviceStore.getState().setSourceKind(kind);
-    updateSettings({ preferredSource: kind });
-  };
-
   const handleClear = () => {
     clearQuickMeasureRuntime({ preservePreset: true });
     useDeviceStore.getState().addStatus('Quick measure cleared');
   };
 
-  const captureDisabled = !connected || recording || blockReason !== null;
+  const verificationBlocksCapture = (verificationStatus === 'checking' || verificationStatus === 'critical') && Boolean(verificationReason);
+  const captureDisabled = !connected || recording || blockReason !== null || verificationBlocksCapture;
   const captureButtonLabel = quickCapture.status === 'capturing'
     ? 'Stop Capture'
     : quickCapture.status === 'armed'
@@ -128,6 +111,8 @@ export function QuickMeasurePanel() {
 
   const statusText = recording
     ? 'Stop session recording before arming a quick capture.'
+    : verificationReason && (verificationStatus === 'checking' || verificationStatus === 'critical')
+      ? verificationReason
     : quickCapture.status === 'armed'
       ? activePreset.captureMode === 'timed_hold'
         ? 'Armed and waiting for the next effort to start a 20-second hold capture.'
@@ -192,7 +177,7 @@ export function QuickMeasurePanel() {
             {device.deviceLabel}
           </div>
           <button
-            onClick={handleConnect}
+            onClick={() => void handleConnectToggle()}
             className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
           >
             Connect device

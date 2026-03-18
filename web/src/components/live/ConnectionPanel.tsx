@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { pipeline } from '../../pipeline/SamplePipeline.ts';
-import type { SourceKind } from '../../types/settings.ts';
 import { saveCurrentRecordingAsSession, sendTareCommand } from '../../live/sessionWorkflow.ts';
 import { defaultConnectedDevice, capabilitySummary } from '../../device/deviceProfiles.ts';
 import { DevicePickerModal } from '../device/DevicePickerModal.tsx';
+import { useVerificationStore, verificationStatusBadge } from '../../stores/verificationStore.ts';
+import { useDeviceConnectionControls } from '../../hooks/useDeviceConnectionControls.ts';
 
 function transportLabel(transport: string): string {
   if (transport === 'serial') return 'USB Serial';
@@ -15,8 +15,6 @@ function transportLabel(transport: string): string {
 }
 
 export function ConnectionPanel() {
-  const sourceKind = useDeviceStore(s => s.sourceKind);
-  const connected = useDeviceStore(s => s.connected);
   const activeDevice = useDeviceStore(s => s.activeDevice);
   const recording = useLiveStore(s => s.recording);
   const quickCapture = useLiveStore(s => s.quickCapture);
@@ -25,49 +23,20 @@ export function ConnectionPanel() {
   const setMeasurementHandOverride = useLiveStore(s => s.setMeasurementHandOverride);
   const hand = useAppStore(s => s.hand);
   const setHand = useAppStore(s => s.setHand);
-  const preferredSource = useAppStore(s => s.settings.preferredSource);
-  const updateSettings = useAppStore(s => s.updateSettings);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
+  const {
+    connected,
+    pickerOpen,
+    setPickerOpen,
+    sourceKind,
+    handleConnectToggle,
+    handleSourceChange,
+  } = useDeviceConnectionControls();
   const selectedDevice = activeDevice ?? defaultConnectedDevice(sourceKind);
   const selectedHand = measurementHandOverride ?? hand;
-
-  useEffect(() => {
-    if (!connected && sourceKind !== preferredSource) {
-      useDeviceStore.getState().setSourceKind(preferredSource);
-    }
-  }, [connected, preferredSource, sourceKind]);
-
-  const handleConnect = async () => {
-    if (connected) {
-      if (recording) {
-        await handleStopRecording();
-      }
-      pipeline.disconnect();
-      return;
-    }
-
-    const selectedSource = useDeviceStore.getState().sourceKind;
-
-    try {
-      await pipeline.connect();
-
-      if (selectedSource === 'Serial') {
-        const shouldTare = window.confirm('Serial connected. Tare with no load now?');
-        if (shouldTare) {
-          sendTareCommand('Auto tare command sent');
-        }
-      }
-    } catch (err) {
-      useDeviceStore.getState().addStatus(`Connection failed: ${String(err)}`);
-      pipeline.disconnect();
-    }
-  };
-
-  const handleSourceChange = (kind: SourceKind) => {
-    if (connected) return;
-    useDeviceStore.getState().setSourceKind(kind);
-    updateSettings({ preferredSource: kind });
-  };
+  const verificationBadge = verificationStatusBadge(verificationStatus);
+  const verificationBlocksActions = (verificationStatus === 'checking' || verificationStatus === 'critical') && Boolean(verificationReason);
 
   const handleTare = () => {
     sendTareCommand();
@@ -122,7 +91,7 @@ export function ConnectionPanel() {
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={handleConnect}
+                onClick={() => void handleConnectToggle()}
                 className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
                   connected
                     ? 'bg-danger/15 text-danger hover:bg-danger/25'
@@ -182,6 +151,14 @@ export function ConnectionPanel() {
                   {selectedDevice.capabilities.perFingerForce ? 'Per-finger live scene' : 'Total-force fallback'}
                 </span>
               </div>
+              {connected && (
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted">Verification</span>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${verificationBadge.className}`}>
+                    {verificationBadge.label}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -220,7 +197,7 @@ export function ConnectionPanel() {
 
             <button
               onClick={handleStartRecording}
-              disabled={!connected || quickCapture.status !== 'idle'}
+              disabled={!connected || quickCapture.status !== 'idle' || verificationBlocksActions}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
                 recording
                   ? 'bg-danger text-white hover:bg-danger/80'
@@ -240,6 +217,11 @@ export function ConnectionPanel() {
           {quickCapture.status !== 'idle' && (
             <div className="mt-3 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-muted">
               Stop or clear the active quick capture before starting a session recording.
+            </div>
+          )}
+          {connected && verificationReason && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-xs ${verificationStatus === 'critical' ? 'border border-danger/30 bg-danger/10 text-danger' : 'border border-warning/30 bg-warning/10 text-warning'}`}>
+              {verificationReason}
             </div>
           )}
         </div>

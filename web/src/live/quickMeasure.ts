@@ -34,7 +34,8 @@ export type QuickCaptureCompletionReason =
   | 'effort_complete'
   | 'duration_complete'
   | 'manual_stop'
-  | 'ended_early';
+  | 'ended_early'
+  | 'verification_failed';
 
 export interface QuickCaptureState {
   status: QuickCaptureStatus;
@@ -335,6 +336,8 @@ export function formatQuickCompletionReason(reason: QuickCaptureCompletionReason
       return 'Capture stopped manually';
     case 'ended_early':
       return 'Effort ended before the full timed hold';
+    case 'verification_failed':
+      return 'Quick capture aborted: runtime verification failed';
     default:
       return 'Effort capture complete';
   }

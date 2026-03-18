@@ -5,6 +5,7 @@ import { saveSettings } from '../storage/settingsStore.ts'
 import { useAppStore } from '../stores/appStore.ts'
 import { useDeviceStore } from '../stores/deviceStore.ts'
 import { useLiveStore } from '../stores/liveStore.ts'
+import { useVerificationStore } from '../stores/verificationStore.ts'
 import { createProfile } from '../types/profile.ts'
 
 export function resetAllStores(partialSettings: Partial<AppSettings> = {}): AppSettings {
@@ -35,6 +36,7 @@ export function resetAllStores(partialSettings: Partial<AppSettings> = {}): AppS
 
   useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds)
   useLiveStore.getState().resetSession()
+  useVerificationStore.getState().reset()
 
   return settings
 }

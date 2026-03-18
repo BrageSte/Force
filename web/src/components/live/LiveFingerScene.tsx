@@ -4,12 +4,14 @@ import { defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import { useAppStore } from '../../stores/appStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
 import { useLiveStore } from '../../stores/liveStore.ts';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
 import { ForceChart } from './ForceChart.tsx';
 import {
   NATIVE_PER_FINGER_SERIES_VISIBILITY,
   TOTAL_ONLY_SERIES_VISIBILITY,
 } from './liveSeries.ts';
 import { pipeline } from '../../pipeline/SamplePipeline.ts';
+import { verificationAllowsLiveDisplay } from '@krimblokk/core';
 
 function sparklinePoints(values: number[], width: number, height: number, maxY: number): string {
   if (values.length === 0) return '';
@@ -210,6 +212,16 @@ function TotalForceFallbackCard({
   );
 }
 
+function VerificationBlockedCard({ reason }: { reason: string }) {
+  return (
+    <div className="rounded-2xl border border-danger/30 bg-danger/10 p-5 text-danger">
+      <div className="text-xs uppercase tracking-[0.22em]">Live Verification Blocked</div>
+      <div className="mt-2 text-xl font-semibold text-text">Live force values are hidden until the stream is verified again.</div>
+      <p className="mt-3 max-w-2xl text-sm">{reason}</p>
+    </div>
+  );
+}
+
 export function LiveFingerScene() {
   const hand = useAppStore(s => s.hand);
   const measurementHandOverride = useLiveStore(s => s.measurementHandOverride);
@@ -229,7 +241,10 @@ export function LiveFingerScene() {
   const quickCapture = useLiveStore(s => s.quickCapture);
   const recording = useLiveStore(s => s.recording);
   const resetLiveDashboard = useLiveStore(s => s.resetLiveDashboard);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
   const device = activeDevice ?? defaultConnectedDevice(sourceKind);
+  const verificationBlocked = !verificationAllowsLiveDisplay(verificationStatus) && Boolean(verificationReason);
   const order = displayOrder(measurementHandOverride ?? hand);
   const activeQuickResult = quickResult && quickResult.presetId === quickMeasurePresetId ? quickResult : null;
 
@@ -281,6 +296,14 @@ export function LiveFingerScene() {
     resetLiveDashboard();
     useDeviceStore.getState().addStatus('LIVE reset');
   };
+
+  if (verificationBlocked) {
+    return (
+      <section aria-label="Live verification blocked" className="space-y-4">
+        <VerificationBlockedCard reason={verificationReason ?? 'Waiting for runtime verification to complete.'} />
+      </section>
+    );
+  }
 
   if (!device.capabilities.perFingerForce) {
     return (

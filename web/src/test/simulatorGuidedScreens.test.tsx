@@ -1,12 +1,14 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createVerificationSnapshot } from '@krimblokk/core'
 import { GuidedTestScreen } from '../components/test/GuidedTestScreen.tsx'
 import { getProtocolById } from '../components/test/testLibrary.ts'
 import { GuidedTrainScreen } from '../components/train/GuidedTrainScreen.tsx'
 import { getTrainProtocolById } from '../components/train/trainLibrary.ts'
 import { createDefaultSimulatorAthleteProfile } from '../device/simulatorAthlete.ts'
 import { useDeviceStore } from '../stores/deviceStore.ts'
+import { useVerificationStore } from '../stores/verificationStore.ts'
 import { resetAllStores } from './testUtils.ts'
 import type { DeviceProvider, DeviceScanResult } from '../types/device.ts'
 import type { ConnectedDeviceInfo } from '../types/force.ts'
@@ -267,5 +269,49 @@ describe('guided simulator screen control', () => {
     mounted = false
 
     expect(provider.restores.at(-1)?.hand).toBe('Right')
+  })
+
+  it('shows an abort message when runtime verification fails mid-test', async () => {
+    resetAllStores({ preferredSource: 'Simulator' })
+    const provider = new FakeSimulatorProvider()
+    useDeviceStore.setState({
+      sourceKind: 'Simulator',
+      provider,
+      connected: true,
+      connectionState: 'connected',
+    })
+
+    const athlete = createDefaultSimulatorAthleteProfile({ referenceMaxKg: 40 })
+
+    await act(async () => {
+      root.render(
+        <GuidedTestScreen
+          protocol={getProtocolById('standard_max')}
+          hand="Right"
+          targetKg={null}
+          oppositeHandBestPeakKg={null}
+          alternateHands={false}
+          profile={null}
+          simulatorProfiles={{ Left: athlete, Right: athlete }}
+          onComplete={() => undefined}
+          onCancel={() => undefined}
+        />,
+      )
+    })
+
+    await act(async () => {
+      buttonByText(container, 'Start Right Attempt').click()
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    await act(async () => {
+      useVerificationStore.setState({
+        snapshot: createVerificationSnapshot('critical', [], 'The stream looks like raw counts while KG mode is active.'),
+        blockReason: 'The stream looks like raw counts while KG mode is active.',
+      })
+    })
+
+    expect(container.textContent).toContain('aborted before any result could be saved')
+    expect(container.textContent).toContain('raw counts while KG mode is active')
   })
 })

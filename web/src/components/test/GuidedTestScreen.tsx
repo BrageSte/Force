@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveStore } from '../../stores/liveStore.ts';
 import { useDeviceStore } from '../../stores/deviceStore.ts';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
 import { FINGER_COLORS, FINGER_NAMES, TOTAL_COLOR, displayFingerOrder } from '../../constants/fingers.ts';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame.ts';
 import { LIVE_PANEL_CATALOG, livePanelLabel } from './testConfig.ts';
@@ -23,6 +24,7 @@ import { LiveForcePanel } from './guided/LiveForcePanel.tsx';
 import { capabilitySummary, defaultConnectedDevice } from '../../device/deviceProfiles.ts';
 import { buildTestSimulatorState } from '../../device/simulatorModel.ts';
 import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
+import { verificationAllowsLiveDisplay } from '@krimblokk/core';
 
 interface GuidedTestScreenProps {
   protocol: TestProtocol;
@@ -99,10 +101,14 @@ export function GuidedTestScreen({
   const connected = useDeviceStore(s => s.connected);
   const sourceKind = useDeviceStore(s => s.sourceKind);
   const activeDevice = useDeviceStore(s => s.activeDevice);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
   const perFingerForce = useDeviceStore(s => (s.activeDevice ?? defaultConnectedDevice(s.sourceKind)).capabilities.perFingerForce);
   const zeroFinger: Finger4 = [0, 0, 0, 0];
   const displayPct = latestPct ?? zeroFinger;
   const device = activeDevice ?? defaultConnectedDevice(sourceKind);
+  const verificationLiveAllowed = verificationAllowsLiveDisplay(verificationStatus);
+  const verificationBlocked = !verificationLiveAllowed && Boolean(verificationReason);
 
   const secondaryHand = otherHand(hand);
   const trackedHands = useMemo<Hand[]>(
@@ -128,6 +134,7 @@ export function GuidedTestScreen({
   const [livePreview, setLivePreview] = useState<AttemptSample[]>([]);
   const [attemptStartAtMs, setAttemptStartAtMs] = useState<number>(0);
   const [showTotalTrace, setShowTotalTrace] = useState<boolean>(!perFingerForce);
+  const [verificationAbortReason, setVerificationAbortReason] = useState<string | null>(null);
 
   const currentSamplesRef = useRef<AttemptSample[]>([]);
   const attemptStartAtMsRef = useRef<number>(0);
@@ -422,8 +429,18 @@ export function GuidedTestScreen({
     previousPhaseRef.current = phase;
   }, [phase, playGoCue, playStopCue]);
 
+  useEffect(() => {
+    if (!verificationBlocked || verificationStatus !== 'critical') return;
+    if (phase === 'finished' || phase === 'ready') return;
+    setVerificationAbortReason(verificationReason ?? 'Runtime verification failed during the active test.');
+    setPhase('finished');
+    setPhaseDurationMs(0);
+    setQueuedHand(null);
+    useDeviceStore.getState().addStatus(`Guided test aborted: ${verificationReason ?? 'runtime verification failed.'}`);
+  }, [phase, verificationBlocked, verificationReason, verificationStatus]);
+
   useAnimationFrame(() => {
-    if (phaseRef.current !== 'live_effort') return;
+    if (phaseRef.current !== 'live_effort' || verificationBlocked) return;
     const now = performance.now();
     const elapsed = now - attemptStartAtMsRef.current;
     if (elapsed - lastCaptureMsRef.current < 16) return;
@@ -661,6 +678,14 @@ export function GuidedTestScreen({
         </div>
       </div>
 
+      {verificationAbortReason && (
+        <div className="rounded-2xl border border-danger/30 bg-danger/10 p-4 text-danger">
+          <div className="text-xs uppercase tracking-wide">Verification Failed</div>
+          <div className="mt-2 text-lg font-semibold text-text">This guided test was aborted before any result could be saved.</div>
+          <div className="mt-2 text-sm">{verificationAbortReason}</div>
+        </div>
+      )}
+
       {!visiblePanelSet.has('timer') && (
         <QuickControlsCard
           phase={phase}
@@ -794,11 +819,13 @@ export function GuidedTestScreen({
               canTare={canTare}
               hasMeaningfulLoad={hasMeaningfulLoad}
               perFingerForce={perFingerForce}
+              verificationBlocked={verificationBlocked}
+              verificationReason={verificationReason}
               onTare={handleTare}
             />
           )}
 
-          {visiblePanelSet.has('contribution') && perFingerForce && (
+          {visiblePanelSet.has('contribution') && perFingerForce && !verificationBlocked && (
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="text-xs text-muted uppercase tracking-wide mb-3">Contribution</div>
               {hasMeaningfulLoad ? (
@@ -828,7 +855,7 @@ export function GuidedTestScreen({
             </div>
           )}
 
-          {visiblePanelSet.has('trace') && (
+          {visiblePanelSet.has('trace') && !verificationBlocked && (
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="text-xs text-muted uppercase tracking-wide mb-2">Live Trace</div>
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">

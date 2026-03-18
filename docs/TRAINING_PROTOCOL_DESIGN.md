@@ -52,12 +52,19 @@ Design goals:
 - live per-finger bars
 - session-wide progress bar
 - warm-up and main block distinction
+- runtime verification must hide live force and block workout start while the stream is unverified
 
 When Tindeq is active:
 
 - the large total-force number and force-time graph remain active
 - per-finger bars, heatmaps, and redistribution-only views are hidden or disabled
 - workouts that require `requiresPerFingerForce: true` are unavailable until native BS hardware is selected
+
+Runtime verification rule:
+
+- `TRAIN` must not start while runtime verification is `checking` or `critical`
+- if runtime verification turns `critical` mid-session, the guided workout is aborted and no partial result is saved
+- live force cards and per-finger contribution stay hidden until verification returns to an allowed state
 
 UI direction is inspired by timer-heavy climbing training apps such as Crimpd, but adapted to Krimblokk's force-measurement surface.
 

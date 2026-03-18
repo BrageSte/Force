@@ -20,9 +20,17 @@ import {
 import { useDeviceStore } from '../stores/deviceStore.ts';
 import { useLiveStore } from '../stores/liveStore.ts';
 import { useAppStore } from '../stores/appStore.ts';
-import { isLikelyRawCounts, KG_TO_N, streamModeForInputMode, type InputMode } from '@krimblokk/core';
+import {
+  isLikelyRawCounts,
+  KG_TO_N,
+  streamModeForInputMode,
+  verificationAllowsLiveDisplay,
+  type InputMode,
+  type VerificationStatus,
+} from '@krimblokk/core';
 import { defaultConnectedDevice } from '../device/deviceProfiles.ts';
 import type { RestoreSimulatorArgs, SimulatorRuntimeState } from '../device/simulatorTypes.ts';
+import { useVerificationStore } from '../stores/verificationStore.ts';
 
 class InlineNativeSourceProvider implements DeviceProvider {
   readonly displayName: string;
@@ -115,6 +123,8 @@ export class SamplePipeline {
   private measurementHand: Hand | null = null;
   private totalEmaState: number | null = null;
   private totalMaBuf: number[] = [];
+  private sampleRateClocks: number[] = [];
+  private lastVerificationStatus: VerificationStatus = 'checking';
 
   constructor() {
     const settings = useAppStore.getState().settings;
@@ -160,13 +170,23 @@ export class SamplePipeline {
     this.sampleCounter = 0;
     this.rawAutoswitchDone = false;
     this.measurementHand = null;
+    this.sampleRateClocks = [];
+    this.lastVerificationStatus = 'checking';
     this.nativeSmoother.reset();
     this.resetTotalSmoother();
     this.detector.reset();
     useLiveStore.getState().setBufferSeconds(settings.ringBufferSeconds);
+    useVerificationStore.getState().beginConnection({
+      sourceKind: deviceStore.sourceKind,
+      requestedStreamMode: deviceStore.sourceKind === 'Tindeq' ? null : streamModeForInputMode(settings.inputMode),
+    });
 
     provider.onForceData = this.handleFrame;
-    provider.onStatus = (msg) => useDeviceStore.getState().addStatus(msg);
+    provider.onStatus = (msg) => {
+      useVerificationStore.getState().handleStatusMessage(msg);
+      useDeviceStore.getState().addStatus(msg);
+      this.handleVerificationTransition(useVerificationStore.getState().snapshot.status);
+    };
     provider.onError = (error) => useDeviceStore.getState().addStatus(error.message);
     provider.onConnectionStateChange = (state, device) => {
       useDeviceStore.getState().setConnectionState(state, device);
@@ -195,10 +215,13 @@ export class SamplePipeline {
     this.resetTotalSmoother();
     this.rawAutoswitchDone = false;
     this.measurementHand = null;
+    this.sampleRateClocks = [];
+    this.lastVerificationStatus = 'checking';
     useLiveStore.getState().clearQuickMeasureRuntime({ preservePreset: true });
     useDeviceStore.getState().setProvider(null);
     useDeviceStore.getState().setConnectedDevice(null);
     useDeviceStore.getState().setConnectionState('idle', null);
+    useVerificationStore.getState().reset();
   }
 
   finalizeActiveEffort(): void {
@@ -214,7 +237,9 @@ export class SamplePipeline {
     if (live.quickCapture.status === 'armed') {
       live.cancelQuickCapture();
       if (addStatus) {
-        useDeviceStore.getState().addStatus('Quick capture cancelled');
+        useDeviceStore.getState().addStatus(
+          reason === 'verification_failed' ? formatQuickCompletionReason(reason) : 'Quick capture cancelled',
+        );
       }
       return;
     }
@@ -270,7 +295,11 @@ export class SamplePipeline {
       stability: null,
     };
 
-    this.commitSample(forceSample, { tareRequired, channelRaw });
+    this.handleVerifiedSample(forceSample, {
+      tareRequired,
+      channelRaw,
+      inputMode: settings.inputMode,
+    });
   }
 
   private handleNormalizedSample(sample: ForceSample): void {
@@ -285,8 +314,9 @@ export class SamplePipeline {
       kg: null,
     };
 
-    this.commitSample(normalizedSample, {
+    this.handleVerifiedSample(normalizedSample, {
       tareRequired: totalSmoothed <= -1,
+      inputMode: useAppStore.getState().settings.inputMode,
     });
   }
 
@@ -388,6 +418,70 @@ export class SamplePipeline {
     );
   }
 
+  private handleVerifiedSample(
+    sample: ForceSample,
+    meta: {
+      tareRequired?: boolean;
+      channelRaw?: Finger4;
+      inputMode: InputMode;
+    },
+  ): void {
+    const sampleRateHz = this.trackSampleRate();
+    const device = useDeviceStore.getState().activeDevice ?? defaultConnectedDevice(useDeviceStore.getState().sourceKind);
+    const snapshot = useVerificationStore.getState().evaluateSample({
+      sample,
+      capabilities: device.capabilities,
+      inputMode: meta.inputMode,
+      sampleRateHz,
+      tareRequired: meta.tareRequired ?? false,
+      requiresPerFingerDisplay: device.capabilities.perFingerForce,
+    });
+
+    this.handleVerificationTransition(snapshot.status, snapshot.blockReason);
+    if (!verificationAllowsLiveDisplay(snapshot.status)) {
+      return;
+    }
+
+    this.commitSample(sample, {
+      tareRequired: meta.tareRequired,
+      channelRaw: meta.channelRaw,
+    });
+  }
+
+  private handleVerificationTransition(status: VerificationStatus, reason?: string | null): void {
+    const previousStatus = this.lastVerificationStatus;
+    if (previousStatus === status) return;
+
+    this.lastVerificationStatus = status;
+    if (status === 'critical') {
+      const message = reason ?? 'Runtime verification failed.';
+      this.abortRuntimeFlows(message);
+      useDeviceStore.getState().addStatus(`Runtime verification blocked live data: ${message}`);
+      return;
+    }
+
+    if (previousStatus === 'critical' && (status === 'verified' || status === 'warning')) {
+      useDeviceStore.getState().addStatus('Runtime verification restored.');
+    }
+  }
+
+  private abortRuntimeFlows(reason: string): void {
+    const liveStore = useLiveStore.getState();
+
+    if (liveStore.recording) {
+      liveStore.discardRecording();
+      useDeviceStore.getState().addStatus(`Recording discarded: ${reason}`);
+    }
+
+    if (liveStore.quickCapture.status !== 'idle') {
+      this.stopQuickCapture('verification_failed');
+    }
+
+    if (liveStore.currentEffortSamples.length > 0) {
+      liveStore.clearEffortAccum();
+    }
+  }
+
   private finalizeCurrentEffort(): void {
     const liveStore = useLiveStore.getState();
     const samples = liveStore.currentEffortSamples;
@@ -414,6 +508,14 @@ export class SamplePipeline {
 
   private finalizeQuickCapture(reason: QuickCaptureCompletionReason, addStatus = true): void {
     const liveStore = useLiveStore.getState();
+    if (reason === 'verification_failed') {
+      liveStore.cancelQuickCapture();
+      if (addStatus) {
+        useDeviceStore.getState().addStatus(formatQuickCompletionReason(reason));
+      }
+      return;
+    }
+
     const samples = liveStore.quickCaptureSamples;
     if (samples.length < 2) {
       liveStore.cancelQuickCapture();
@@ -468,6 +570,15 @@ export class SamplePipeline {
   private resetTotalSmoother(): void {
     this.totalEmaState = null;
     this.totalMaBuf = [];
+  }
+
+  private trackSampleRate(): number {
+    const now = performance.now();
+    this.sampleRateClocks = [...this.sampleRateClocks, now].slice(-30);
+    if (this.sampleRateClocks.length < 2) return 0;
+    const durationS = (this.sampleRateClocks[this.sampleRateClocks.length - 1] - this.sampleRateClocks[0]) / 1000;
+    if (durationS <= 0) return 0;
+    return (this.sampleRateClocks.length - 1) / durationS;
   }
 
   private applyTotalSmoothing(totalKg: number): number {

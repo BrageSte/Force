@@ -50,6 +50,7 @@ import { toProfileSnapshot } from '../../types/profile.ts';
 import { capabilityBlockReason, deviceCapabilitiesForSourceKind } from '../../device/capabilityChecks.ts';
 import { resolveSimulatorAthleteContext } from '../../device/simulatorAthlete.ts';
 import type { SimulatorAthleteProfile } from '../../device/simulatorTypes.ts';
+import { useVerificationStore } from '../../stores/verificationStore.ts';
 
 type TestPageView = 'library' | 'guided' | 'results' | 'compare' | 'finger' | 'session';
 
@@ -70,6 +71,8 @@ export function TestPage() {
   const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
   const connected = useDeviceStore(s => s.connected);
   const sourceKind = useDeviceStore(s => s.sourceKind);
+  const verificationStatus = useVerificationStore(s => s.snapshot.status);
+  const verificationReason = useVerificationStore(s => s.blockReason);
 
   const [view, setView] = useState<TestPageView>('library');
   const [selectedRef, setSelectedRef] = useState<ProtocolRef>({ kind: 'builtin', id: 'standard_max' });
@@ -188,6 +191,9 @@ export function TestPage() {
   );
 
   const selectedStartBlockReason = useMemo(() => {
+    if ((verificationStatus === 'checking' || verificationStatus === 'critical') && verificationReason) {
+      return verificationReason;
+    }
     if (selectedRef.kind === 'builtin') {
       const protocol = getProtocolById(selectedRef.id as TestId);
       return capabilityBlockReason(protocol.capabilityRequirements, selectedDeviceCapabilities);
@@ -196,7 +202,7 @@ export function TestPage() {
     return template
       ? capabilityBlockReason(template.capabilityRequirements, selectedDeviceCapabilities)
       : null;
-  }, [customTemplates, selectedDeviceCapabilities, selectedRef]);
+  }, [customTemplates, selectedDeviceCapabilities, selectedRef, verificationReason, verificationStatus]);
 
   const persistTemplate = (template: CustomTestTemplate): CustomTestTemplate => {
     const all = upsertCustomTemplate(template);
@@ -222,8 +228,11 @@ export function TestPage() {
     }
 
     const blockReason = capabilityBlockReason(protocol.capabilityRequirements, selectedDeviceCapabilities);
-    if (blockReason) {
-      useDeviceStore.getState().addStatus(blockReason);
+    const verificationBlockReason = verificationStatus === 'checking' || verificationStatus === 'critical'
+      ? verificationReason
+      : null;
+    if (verificationBlockReason || blockReason) {
+      useDeviceStore.getState().addStatus(verificationBlockReason ?? blockReason ?? 'Guided test start blocked.');
       return;
     }
 

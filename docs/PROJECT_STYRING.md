@@ -37,6 +37,7 @@ I scope na:
 - levere og stabilisere godkjent `LIVE` first-screen redesign
 - tydeliggjore rollefordelingen mellom `LIVE`, `TEST` og `TRAIN`
 - holde device- og metricslogikk capability-aware
+- innfore runtime-verifisering som blokkerer uverifisert visning og lagring av kraftdata
 - flytte eller samle delt parsing-, kalibrerings-, metrics- og workoutlogikk i `packages/core`
 - rydde repo, dokumentasjon og onboarding for videre web/BLE-migrering
 - bevare secure-context krav for Web Serial og Web Bluetooth-kompatible flows
@@ -155,6 +156,7 @@ Alle endringer i repoet skal holde disse reglene:
 - total-force-only enheter skal ikke fa fake per-finger UI eller fake per-finger metrics
 - nye transportformat eller enhetskontrakter skal ikke innfores utenfor delt kjerne
 - secure-context krav for browser runtime ma forbli eksplisitte i docs og deployoppsett
+- brukerrettede kraftverdier skal ikke vises, brukes i guided flyt eller lagres nar runtime-verifisering staar i `checking` eller `critical`
 
 ## 8. Aktive beslutninger
 
@@ -203,25 +205,30 @@ Alle endringer i repoet skal holde disse reglene:
 
 ## 10. Risikoer og tiltak
 
-- Risiko: domenelogikk blir duplisert mellom `web/` og `packages/core`.
-  - Konsekvens: ulike tall mellom skjermer og klienter.
+- Risiko: brukerflate viser kraftdata for firmware-modus er bekreftet.
+  - Konsekvens: kg og raw kan forveksles, og tallene kan bli misvisende.
   - Sannsynlighet: middels.
-  - Tiltak: flytt felles parser-, metrics-, analyse- og workoutlogikk til `packages/core`.
+  - Tiltak: runtime-verifisering skal starte i `checking`, vente pa mode-bekreftelse og blokkere visning/lagring til gyldig sample er verifisert.
 
-- Risiko: bruker blander `MODE_KG_DIRECT` og `MODE_RAW`.
-  - Konsekvens: feilkalibrering eller misvisende kraftverdier.
+- Risiko: tare drift eller negative maaleverdier slipper gjennom som gyldig live-data.
+  - Konsekvens: display, recording og guided flyt kan bygge pa feil nullpunkt.
   - Sannsynlighet: middels.
-  - Tiltak: tydelig settings-tekst, eksplisitt stream mode og testdekning for begge modi.
+  - Tiltak: `tare required` skal vaere kritisk runtime-feil som skjuler live-tall og avbryter aktive flyter uten a lagre delresultat.
 
-- Risiko: total-force-only device far UI eller analyser som later som de er per-finger-aware.
+- Risiko: total-force-only device far per-finger UI eller per-finger analyser.
   - Konsekvens: misvisende feedback og feil treningsanbefalinger.
   - Sannsynlighet: middels.
-  - Tiltak: capability gating i baade dataflyt, analyse og UI.
+  - Tiltak: capability gating og runtime sample-shape verifisering i baade dataflyt, analyse og UI.
 
-- Risiko: BLE-planlegging starter for sample-kontrakten er stabil.
-  - Konsekvens: unodige adapterlag og ny duplisering.
+- Risiko: total og per-finger summer driver fra hverandre i klientlaget.
+  - Konsekvens: brukeren kan se inkonsistente tall mellom kort, grafer og resultater.
+  - Sannsynlighet: lav til middels.
+  - Tiltak: delt verifiseringslogikk i `packages/core` skal kontrollere sample-shape, total-vs-sum og tidsrekkefolge for alle brukerrettede samples.
+
+- Risiko: domenelogikk og verifiseringsregler blir duplisert mellom `web/` og `packages/core`.
+  - Konsekvens: ulike blokkregler og ulike tall mellom skjermer og klienter.
   - Sannsynlighet: middels.
-  - Tiltak: ferdigstill og test delt kontrakt rundt dagens Serial-path forst.
+  - Tiltak: hold parser-, metrics-, analyse- og verifiseringslogikk samlet i delt kjerne der det er mulig.
 
 ## 11. Test- og akseptkriterier
 
@@ -230,10 +237,11 @@ Denne fasen er godkjent nar:
 - `web/` fortsatt fungerer mot `CURRENT_UNO_HX711`
 - overordnet webstruktur er stabil, med godkjent `LIVE` first-screen redesign
 - `LIVE` viser connection hero, quick-mode rail, per-finger live-scene pa native hardware og total-force fallback pa Tindeq
+- runtime-verifisering viser `Verifying`, `Verified`, `Attention` eller `Blocked`, og blokkerer recording, `TEST` og `TRAIN` i `checking` eller `critical`
 - `README.md`, `PROJECT_CONTEXT.md`, `REPO_MAP.md` og dette dokumentet peker nye brukere til riktig baseline
 - parsing, kalibrering, metrics og workoutregler er forankret i `packages/core` eller tydelig under flytting dit
 - repoet ikke inneholder utfaset desktop-surface eller desktop-spesifikke instrukser
-- web har automatisk testdekning for parser, capability gating, settings og sentrale live/test/train flows
+- web har automatisk testdekning for parser, capability gating, runtime-verifisering, settings og sentrale live/test/train flows
 
 Manuell hardware-verifisering som fortsatt kreves:
 
@@ -241,6 +249,8 @@ Manuell hardware-verifisering som fortsatt kreves:
 - tare
 - `kg`-stream
 - `raw`-stream
+- mode mismatch og recovery etter ny bekreftelse
+- runtime blokkering ved feil tare/nullpunkt
 - benchmark-flyt
 - train-flyt
 - session save/export
@@ -267,3 +277,4 @@ Manuell hardware-verifisering som fortsatt kreves:
 - 2026-03-16: Fjernet desktop-surface og formaliserte Tindeq som ekstern total-force-device.
 - 2026-03-17: Godkjente `LIVE` first-screen redesign.
 - 2026-03-17: Restrukturerte styringsdokumentet for tydeligere scope, guardrails og dokumentflyt.
+- 2026-03-18: La til runtime-verifisering som guardrail, risiko- og akseptkriterium for korrekt visning og lagring av data.

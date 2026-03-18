@@ -28,6 +28,10 @@ class MockSource implements DataSource {
     return this.running
   }
 
+  emitStatus(message: string): void {
+    this.onStatus?.(message)
+  }
+
   emitValues(tMs: number, values: [number, number, number, number]): void {
     this.onSample?.({ tMs, values })
   }
@@ -50,6 +54,7 @@ describe('quick capture integration', () => {
 
     const source = new MockSource()
     await pipeline.connect(source)
+    source.emitStatus('mode kg')
 
     useLiveStore.getState().setQuickMeasurePreset('peak_total_pull')
     useLiveStore.getState().armQuickCapture('peak_total_pull', 'Right')
@@ -82,6 +87,7 @@ describe('quick capture integration', () => {
 
     const source = new MockSource()
     await pipeline.connect(source)
+    source.emitStatus('mode kg')
 
     useLiveStore.getState().setQuickMeasurePreset('drift_hold_20s')
     useLiveStore.getState().armQuickCapture('drift_hold_20s', 'Right')

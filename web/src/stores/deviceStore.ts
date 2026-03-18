@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DeviceCommand, InputMode, SourceKind } from '@krimblokk/core';
+import { streamModeForInputMode, type DeviceCommand, type InputMode, type SourceKind } from '@krimblokk/core';
 import { loadSettings } from '../storage/settingsStore.ts';
 import { NativeBsDeviceProvider } from '../device/NativeBsDeviceProvider.ts';
 import { TindeqDeviceProvider } from '../device/TindeqDeviceProvider.ts';
@@ -10,6 +10,7 @@ import type {
 } from '../types/device.ts';
 import type { ConnectedDeviceInfo } from '../types/force.ts';
 import type { RestoreSimulatorArgs, SimulatorRuntimeState } from '../device/simulatorTypes.ts';
+import { useVerificationStore } from './verificationStore.ts';
 
 interface DeviceState {
   sourceKind: SourceKind;
@@ -139,8 +140,12 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   },
 
   setInputMode: async (inputMode) => {
-    const provider = get().provider;
+    const state = get();
+    const provider = state.provider;
     if (!provider?.setInputMode) return;
+    if (state.connected) {
+      useVerificationStore.getState().noteRequestedStreamMode(streamModeForInputMode(inputMode));
+    }
     await provider.setInputMode(inputMode);
   },
 
