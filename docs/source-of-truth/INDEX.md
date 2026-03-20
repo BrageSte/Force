@@ -20,6 +20,9 @@ If any document in `docs/reference/`, `docs/plans/`, chats, notes, PDFs, or ad h
 ### `PROJECT_GOVERNANCE.md`
 Defines documentation authority, maintenance rules, and how canonical docs relate to reference material and working notes.
 
+### `WORKING_WITH_AI.md`
+Practical operating guide for AI tools and human collaborators: where truth lives, what to read first, and how to handle conflicts.
+
 ### `PRODUCT_SCOPE.md`
 Defines what GripSense is, who it is for, the active product surfaces, and what is explicitly in and out of scope.
 

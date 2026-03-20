@@ -6,6 +6,7 @@ The authoritative project baseline now lives in:
 
 - `docs/source-of-truth/INDEX.md`
 - `docs/source-of-truth/PROJECT_GOVERNANCE.md`
+- `docs/source-of-truth/WORKING_WITH_AI.md`
 - `docs/source-of-truth/PRODUCT_SCOPE.md`
 - `docs/source-of-truth/SYSTEM_ARCHITECTURE.md`
 - `docs/source-of-truth/HARDWARE_SPEC.md`

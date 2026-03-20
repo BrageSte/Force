@@ -3,10 +3,11 @@
 ## Mandatory Read Order
 
 1. Read [docs/source-of-truth/INDEX.md](docs/source-of-truth/INDEX.md) before analysis, planning, review, or code changes.
-2. If the task touches architecture, hardware, BLE, transport contracts, roadmap, or migration strategy, also read [docs/source-of-truth/SYSTEM_ARCHITECTURE.md](docs/source-of-truth/SYSTEM_ARCHITECTURE.md), [docs/source-of-truth/HARDWARE_SPEC.md](docs/source-of-truth/HARDWARE_SPEC.md), and [docs/source-of-truth/ROADMAP.md](docs/source-of-truth/ROADMAP.md).
-3. If the task touches benchmarks, training, workouts, custom protocols, prescription logic, or train/test UI, also read [docs/source-of-truth/METRICS_AND_PROTOCOLS.md](docs/source-of-truth/METRICS_AND_PROTOCOLS.md) and [docs/source-of-truth/VALIDATION_PLAN.md](docs/source-of-truth/VALIDATION_PLAN.md).
+2. Read [docs/source-of-truth/WORKING_WITH_AI.md](docs/source-of-truth/WORKING_WITH_AI.md) immediately after `INDEX.md` for repo navigation, source-of-truth hierarchy, and conflict-handling rules.
+3. If the task touches architecture, hardware, BLE, transport contracts, roadmap, or migration strategy, also read [docs/source-of-truth/SYSTEM_ARCHITECTURE.md](docs/source-of-truth/SYSTEM_ARCHITECTURE.md), [docs/source-of-truth/HARDWARE_SPEC.md](docs/source-of-truth/HARDWARE_SPEC.md), and [docs/source-of-truth/ROADMAP.md](docs/source-of-truth/ROADMAP.md).
+4. If the task touches benchmarks, training, workouts, custom protocols, prescription logic, or train/test UI, also read [docs/source-of-truth/METRICS_AND_PROTOCOLS.md](docs/source-of-truth/METRICS_AND_PROTOCOLS.md) and [docs/source-of-truth/VALIDATION_PLAN.md](docs/source-of-truth/VALIDATION_PLAN.md).
 
-Do not skip these files. They define the current product purpose, the active Arduino UNO based setup, the future XIAO BLE direction, and the repo decisions that keep web stable during migration.
+Do not skip the required files for your task. They define the current product purpose, the active Arduino UNO based setup, the future XIAO BLE direction, the repo decisions that keep web stable during migration, and the practical rules for working safely inside the repo.
 
 ## Project Guardrails
 

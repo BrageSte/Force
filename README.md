@@ -13,6 +13,8 @@ Read these first:
 3. `docs/source-of-truth/PRODUCT_SCOPE.md`
 4. `docs/source-of-truth/SYSTEM_ARCHITECTURE.md`
 
+If you are onboarding a collaborator or using an AI assistant, also read `docs/source-of-truth/WORKING_WITH_AI.md` after `docs/source-of-truth/INDEX.md` for the practical repo-working rules.
+
 Supporting material lives in `docs/reference/`. It is useful for onboarding, research, and AI quickstarts, but it is not authoritative if it conflicts with `docs/source-of-truth/`.
 
 ## Current Repo Baseline
