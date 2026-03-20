@@ -10,8 +10,10 @@ import {
   type QuickMeasureResult,
 } from '../live/quickMeasure.ts';
 
+const CURRENT_UNO_HX711_BUFFER_RATE_HZ = 80;
+
 function bufferCapacityForSeconds(seconds: number): number {
-  return Math.max(250, Math.round(Math.max(15, seconds) * 50));
+  return Math.max(250, Math.round(Math.max(15, seconds) * CURRENT_UNO_HX711_BUFFER_RATE_HZ));
 }
 
 function createFingerSeries(capacity: number): [Float64Array, Float64Array, Float64Array, Float64Array] {

@@ -34,7 +34,7 @@ Aktiv hardwareprofil: `CURRENT_UNO_HX711`
 Beskrivelse:
 
 - 1 x Arduino UNO
-- 4 x HX711
+- 4 x HX711 konfigurert for 80 SPS
 - 4 x strain/load cell
 - USB serial til host-maskin
 
@@ -43,6 +43,8 @@ Kontrakter:
 - firmware: `firmware/firmware.ino`
 - host sender kommandoer for tare, debug og stream-modus
 - aktiv sampletransport er newline-delimited serial tekst
+- firmware streamer ferske 4-kanals frames ved faktisk converter-rate
+- maalrate er omtrent 80 Hz nar alle 4 HX711-moduler fysisk er satt til 80 SPS
 
 ## Naavaerende software
 
@@ -176,6 +178,8 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 - tare
 - kg-stream
 - raw-stream
+- verifisere at live sample-rate ligger omtrent 75-80 Hz
+- verifisere at `t_ms` typisk oker med ca. 12-13 ms mellom frames
 - testflyt
 - session save/export
 
@@ -193,3 +197,4 @@ Manuell verifisering som kreves senere pa fysisk hardware:
 - 2026-03-11: Formaliserte hardwareprofilene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
 - 2026-03-15: Ryddet repoet for lokale runtime-artefakter og tydeliggjorde `web/` som eneste aktive produktflate.
 - 2026-03-16: Fjernet utfaset desktop-surface fra repoet og oppdaterte dokumentasjonen til web-only baseline.
+- 2026-03-19: Dokumenterte `CURRENT_UNO_HX711` som 80 SPS / ~80 Hz-baseline med fysisk HX711-ratekrav.

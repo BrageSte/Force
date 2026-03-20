@@ -32,7 +32,7 @@ Hardware profile name: `CURRENT_UNO_HX711`
 Current physical setup in active use:
 
 - 1 x Arduino UNO
-- 4 x HX711
+- 4 x HX711 configured for 80 SPS
 - 4 x strain/load cell channels
 - USB serial connection from device to host
 
@@ -41,6 +41,8 @@ Current firmware assumptions:
 - firmware lives in `firmware/firmware.ino`
 - transport is newline-delimited serial text
 - tare, debug, and stream-mode commands are sent over serial
+- firmware emits fresh 4-channel frames when all HX711 channels are ready
+- true ~80 Hz capture requires all 4 HX711 modules to be physically configured for 80 SPS
 
 ## Current Software Surfaces
 

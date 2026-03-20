@@ -9,11 +9,15 @@
  *   CH4 (Pinky)  — DOUT 5, SCK 9
  *
  * Serial protocol (115200 baud):
- *   Output: ms,kg1,kg2,kg3,kg4\n  (~50 Hz)
+ *   Output: ms,kg1,kg2,kg3,kg4\n  (fresh frames, up to ~80 Hz)
  *   Commands:
  *     t            — tare all channels
  *     c <ch> <kg>  — calibrate channel (1-4) with known mass
  *     p            — print calibration info
+ *
+ * Hardware note:
+ *   To reach ~80 Hz on CURRENT_UNO_HX711, all HX711 boards must be
+ *   physically configured for 80 SPS. Firmware alone cannot force 80 SPS.
  */
 
 #include <HX711.h>
@@ -21,7 +25,6 @@
 
 #define NUM_CH 4
 #define BAUD 115200
-#define LOOP_MS 20        // ~50 Hz
 #define EEPROM_VER 0xA1
 #define EEPROM_ADDR 0     // version(1) + 4 floats(16) = 17 bytes
 
@@ -44,6 +47,13 @@ static bool output_raw_mode = true; // true=raw counts, false=kg
 
 // ── Sampling helpers ────────────────────────────────────────────
 
+bool allChannelsReady() {
+  for (int i = 0; i < NUM_CH; i++) {
+    if (!scale[i].is_ready()) return false;
+  }
+  return true;
+}
+
 bool readChannelRawWithTimeout(int idx, long &raw_out, unsigned long timeout_ms) {
   unsigned long t0 = millis();
   while ((millis() - t0) < timeout_ms) {
@@ -57,6 +67,36 @@ bool readChannelRawWithTimeout(int idx, long &raw_out, unsigned long timeout_ms)
     delay(1);
   }
   return false;
+}
+
+void readFreshFrame() {
+  for (int i = 0; i < NUM_CH; i++) {
+    long raw = scale[i].read();
+    last_raw_counts[i] = raw;
+    last_delta_counts[i] = raw - offset_counts[i];
+    has_raw_sample[i] = true;
+  }
+}
+
+void updateOutputFrame() {
+  for (int i = 0; i < NUM_CH; i++) {
+    long delta = last_raw_counts[i] - offset_counts[i];
+    last_delta_counts[i] = delta;
+    if (output_raw_mode) {
+      last_kg[i] = (float)delta;
+    } else {
+      last_kg[i] = (float)delta * kg_per_count[i];
+    }
+  }
+}
+
+void streamFrame(unsigned long t_ms) {
+  Serial.print(t_ms);
+  for (int i = 0; i < NUM_CH; i++) {
+    Serial.print(',');
+    Serial.print(last_kg[i], 3);
+  }
+  Serial.println();
 }
 
 // ── EEPROM helpers ──────────────────────────────────────────────
@@ -231,41 +271,13 @@ void setup() {
 }
 
 void loop() {
-  unsigned long t0 = millis();
-
-  // Read all channels
-  for (int i = 0; i < NUM_CH; i++) {
-    if (scale[i].is_ready()) {
-      long raw = scale[i].read();
-      last_raw_counts[i] = raw;
-      has_raw_sample[i] = true;
-    }
-
-    if (has_raw_sample[i]) {
-      long delta = last_raw_counts[i] - offset_counts[i];
-      last_delta_counts[i] = delta;
-      if (output_raw_mode) {
-        last_kg[i] = (float)delta;
-      } else {
-        last_kg[i] = (float)delta * kg_per_count[i];
-      }
-    }
-    // else: keep last_kg[i] as fallback
-  }
-
-  // Stream CSV line
-  Serial.print(t0);
-  for (int i = 0; i < NUM_CH; i++) {
-    Serial.print(',');
-    Serial.print(last_kg[i], 3);
-  }
-  Serial.println();
-
   handleSerial();
 
-  // Pace to ~50 Hz
-  unsigned long elapsed = millis() - t0;
-  if (elapsed < LOOP_MS) {
-    delay(LOOP_MS - elapsed);
-  }
+  // Emit one frame only when every channel has a fresh conversion ready.
+  if (!allChannelsReady()) return;
+
+  unsigned long t0 = millis();
+  readFreshFrame();
+  updateOutputFrame();
+  streamFrame(t0);
 }
