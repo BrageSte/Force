@@ -30,6 +30,7 @@ import type {
   CustomTrainWorkout,
   TrainRecommendation,
   TrainSessionResult,
+  TrainTier,
   TrainTargetMode,
   TrainWorkoutId,
   TrainWorkoutKind,
@@ -88,6 +89,7 @@ export function TrainPage() {
   const [builderState, setBuilderState] = useState<BuilderState | null>(null);
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [alternateHands, setAlternateHands] = useState(false);
+  const [showAdvancedWorkouts, setShowAdvancedWorkouts] = useState(false);
 
   useEffect(() => {
     const sync = async () => {
@@ -131,6 +133,17 @@ export function TrainPage() {
     () => recommendations.find(item => item.workoutId === selectedWorkout.id) ?? null,
     [recommendations, selectedWorkout.id],
   );
+  const coreBuiltInWorkouts = useMemo(
+    () => TRAIN_LIBRARY.filter(workout => workout.tier === 'Core'),
+    [],
+  );
+  const advancedBuiltInWorkouts = useMemo(
+    () => TRAIN_LIBRARY.filter(workout => workout.tier === 'Advanced'),
+    [],
+  );
+  const advancedWorkoutsOpen =
+    showAdvancedWorkouts ||
+    (selectedWorkoutKind === 'builtin' && 'tier' in selectedWorkout && selectedWorkout.tier === 'Advanced');
 
   const autoTarget = useMemo(
     () => resolveTrainTarget(selectedWorkout, profileTests, hand, activeProfile),
@@ -262,6 +275,14 @@ export function TrainPage() {
     setCustomWorkouts(loadCustomTrainWorkouts());
   };
 
+  const handleSelectWorkout = (workoutId: TrainWorkoutId, workoutKind: TrainWorkoutKind) => {
+    setSelectedWorkoutId(workoutId);
+    setSelectedWorkoutKind(workoutKind);
+    if (workoutKind === 'builtin' && isTrainPresetId(workoutId) && getTrainProtocolById(workoutId).tier === 'Advanced') {
+      setShowAdvancedWorkouts(true);
+    }
+  };
+
   if (view === 'guided' && activeRun) {
     const runtimeWorkout = activeRun.workoutKind === 'builtin' && isTrainPresetId(activeRun.workoutId)
       ? getTrainProtocolById(activeRun.workoutId)
@@ -354,31 +375,63 @@ export function TrainPage() {
           <RecommendationPanel
             recommendations={recommendations}
             selectedWorkoutId={selectedWorkout.id}
-            onSelect={(workoutId, workoutKind) => {
-              setSelectedWorkoutId(workoutId);
-              setSelectedWorkoutKind(workoutKind);
-            }}
+            onSelect={handleSelectWorkout}
           />
 
           <LibrarySection
-            title="Built-In Workouts"
-            subtitle={`${TRAIN_LIBRARY.length} benchmark-driven sessions`}
-            cards={TRAIN_LIBRARY.map(workout => ({
+            title="Core Workouts"
+            subtitle={`${coreBuiltInWorkouts.length} benchmark-driven sessions`}
+            cards={coreBuiltInWorkouts.map(workout => ({
               id: workout.id,
               kind: 'builtin' as const,
               title: workout.name,
               subtitle: workout.trainingGoal,
+              badge: workout.tier,
               meta: `${formatCategoryLabel(workout.category)} · ${formatGripSpec(workout.gripType, workout.modality)}`,
               structure: describeBlocks(workout.blocks),
               selected: selectedWorkoutKind === 'builtin' && selectedWorkoutId === workout.id,
               recommendation: recommendations.find(item => item.workoutId === workout.id) ?? null,
               latestPeak: profileTraining.find(result => result.workoutId === workout.id && result.hand === hand)?.summary.peakTotalKg ?? null,
             }))}
-            onSelect={(id, kind) => {
-              setSelectedWorkoutId(id);
-              setSelectedWorkoutKind(kind);
-            }}
+            onSelect={handleSelectWorkout}
           />
+
+          <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Advanced Workouts</div>
+                <div className="text-xs text-muted mt-1">
+                  Show narrower sessions after the core library stops answering the right question.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAdvancedWorkouts(current => !current)}
+                className="rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs font-medium text-text"
+              >
+                {advancedWorkoutsOpen ? 'Hide Advanced' : `Show Advanced (${advancedBuiltInWorkouts.length})`}
+              </button>
+            </div>
+
+            {advancedWorkoutsOpen && (
+              <LibrarySection
+                title="Advanced Library"
+                subtitle={`${advancedBuiltInWorkouts.length} higher-specificity sessions`}
+                cards={advancedBuiltInWorkouts.map(workout => ({
+                  id: workout.id,
+                  kind: 'builtin' as const,
+                  title: workout.name,
+                  subtitle: workout.trainingGoal,
+                  badge: workout.tier,
+                  meta: `${formatCategoryLabel(workout.category)} · ${formatGripSpec(workout.gripType, workout.modality)}`,
+                  structure: describeBlocks(workout.blocks),
+                  selected: selectedWorkoutKind === 'builtin' && selectedWorkoutId === workout.id,
+                  recommendation: recommendations.find(item => item.workoutId === workout.id) ?? null,
+                  latestPeak: profileTraining.find(result => result.workoutId === workout.id && result.hand === hand)?.summary.peakTotalKg ?? null,
+                }))}
+                onSelect={handleSelectWorkout}
+              />
+            )}
+          </div>
 
           <LibrarySection
             title="Custom Workouts"
@@ -389,6 +442,7 @@ export function TrainPage() {
               kind: 'custom' as const,
               title: workout.name,
               subtitle: workout.trainingGoal,
+              badge: 'Custom',
               meta: `${formatCategoryLabel(workout.category)} · ${formatGripSpec(workout.gripType, workout.modality)}`,
               structure: describeBlocks(workout.blocks),
               selected: selectedWorkoutKind === 'custom' && selectedWorkoutId === workout.id,
@@ -408,10 +462,7 @@ export function TrainPage() {
                 },
               },
             }))}
-            onSelect={(id, kind) => {
-              setSelectedWorkoutId(id);
-              setSelectedWorkoutKind(kind);
-            }}
+            onSelect={handleSelectWorkout}
           />
         </div>
 
@@ -522,39 +573,92 @@ function RecommendationPanel({
   selectedWorkoutId: TrainWorkoutId;
   onSelect: (workoutId: TrainWorkoutId, kind: TrainWorkoutKind) => void;
 }) {
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const primaryRecommendation = recommendations[0] ?? null;
+  const alternatives = recommendations.slice(1);
+
+  if (!primaryRecommendation) return null;
+
+  const primaryWorkout = isTrainPresetId(primaryRecommendation.workoutId)
+    ? getTrainProtocolById(primaryRecommendation.workoutId)
+    : null;
+
   return (
     <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Recommended Next Sessions</h3>
-          <p className="text-xs text-muted mt-1">Deterministic prescription based on recent benchmark history for the active hand.</p>
+          <h3 className="text-sm font-semibold">Coach Recommendation</h3>
+          <p className="text-xs text-muted mt-1">One primary next session, with alternatives only when they add real value.</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {recommendations.map(item => {
-          const workout = isTrainPresetId(item.workoutId) ? getTrainProtocolById(item.workoutId) : null;
-          if (!workout) return null;
-          const active = selectedWorkoutId === item.workoutId;
-          return (
-            <button
-              key={item.workoutId}
-              onClick={() => onSelect(item.workoutId, 'builtin')}
-              className={`text-left rounded-xl border p-4 transition-colors ${active ? 'border-primary bg-primary/5' : 'border-border bg-surface-alt hover:border-primary/30'}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">{workout.name}</div>
-                  <div className="text-xs text-muted mt-1">{item.reason}</div>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase ${item.priority === 'primary' ? 'bg-primary/15 text-primary' : item.priority === 'secondary' ? 'bg-warning/15 text-warning' : 'bg-surface border border-border text-muted'}`}>
-                  {item.priority}
-                </span>
-              </div>
-              <div className="mt-2 text-xs text-muted">{buildPrescriptionText(item)}</div>
-            </button>
-          );
-        })}
-      </div>
+      {primaryWorkout && (
+        <button
+          onClick={() => onSelect(primaryRecommendation.workoutId, 'builtin')}
+          className={`w-full text-left rounded-xl border p-4 transition-colors ${
+            selectedWorkoutId === primaryRecommendation.workoutId
+              ? 'border-primary bg-primary/5'
+              : 'border-border bg-surface-alt hover:border-primary/30'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">{primaryWorkout.name}</div>
+              <div className="text-xs text-muted mt-1">{primaryRecommendation.reason}</div>
+            </div>
+            <span className="px-2 py-1 rounded-full text-[10px] font-semibold uppercase bg-primary/15 text-primary">
+              Primary
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="rounded-lg border border-border bg-surface px-3 py-3">
+              <div className="text-muted">Why this now</div>
+              <div className="mt-1 text-text">{buildPrescriptionText(primaryRecommendation)}</div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface px-3 py-3">
+              <div className="text-muted">Session context</div>
+              <div className="mt-1 font-semibold text-text">{formatCategoryLabel(primaryWorkout.category)} · {formatGripSpec(primaryWorkout.gripType, primaryWorkout.modality)}</div>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {alternatives.length > 0 && (
+        <>
+          <button
+            onClick={() => setShowAlternatives(current => !current)}
+            className="rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs font-medium text-text"
+          >
+            {showAlternatives ? 'Hide Alternatives' : `Show Alternatives (${alternatives.length})`}
+          </button>
+          {showAlternatives && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {alternatives.map(item => {
+                const workout = isTrainPresetId(item.workoutId) ? getTrainProtocolById(item.workoutId) : null;
+                if (!workout) return null;
+                const active = selectedWorkoutId === item.workoutId;
+                return (
+                  <button
+                    key={item.workoutId}
+                    onClick={() => onSelect(item.workoutId, 'builtin')}
+                    className={`text-left rounded-xl border p-4 transition-colors ${active ? 'border-primary bg-primary/5' : 'border-border bg-surface-alt hover:border-primary/30'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold">{workout.name}</div>
+                        <div className="text-xs text-muted mt-1">{item.reason}</div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase ${item.priority === 'secondary' ? 'bg-warning/15 text-warning' : 'bg-surface border border-border text-muted'}`}>
+                        {item.priority}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-muted">{buildPrescriptionText(item)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -573,6 +677,7 @@ function LibrarySection({
     kind: TrainWorkoutKind;
     title: string;
     subtitle: string;
+    badge: TrainTier | 'Custom';
     meta: string;
     structure: string;
     selected: boolean;
@@ -604,11 +709,16 @@ function LibrarySection({
                   <div className="text-sm font-semibold">{card.title}</div>
                   <div className="text-xs text-muted mt-1">{card.subtitle}</div>
                 </button>
-                {card.recommendation && (
-                  <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase ${card.recommendation.priority === 'primary' ? 'bg-primary/15 text-primary' : card.recommendation.priority === 'secondary' ? 'bg-warning/15 text-warning' : 'bg-surface-alt text-muted border border-border'}`}>
-                    {card.recommendation.priority}
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase ${card.badge === 'Core' ? 'bg-success/15 text-success' : card.badge === 'Advanced' ? 'bg-warning/15 text-warning' : 'bg-primary/15 text-primary'}`}>
+                    {card.badge}
                   </span>
-                )}
+                  {card.recommendation && (
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase ${card.recommendation.priority === 'primary' ? 'bg-primary/15 text-primary' : card.recommendation.priority === 'secondary' ? 'bg-warning/15 text-warning' : 'bg-surface-alt text-muted border border-border'}`}>
+                      {card.recommendation.priority}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-surface-alt rounded-lg px-3 py-2">

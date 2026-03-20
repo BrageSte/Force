@@ -1,14 +1,18 @@
 # REPO_MAP
 
-> Snapshot: 2026-03-17
+> Snapshot: 2026-03-20
 > Repo: `BrageSte/Force`
-> Produktnavn i aktiv baseline: `Krimblokk v1.5`
+> Produktnavn i aktiv baseline: `GripSense v1.5`
+
+Denne filen er en navigasjonshjelp, ikke autoritativ prosjektstyring.
+
+For gjeldende sannhet om produkt, scope, arkitektur og roadmap, start i `docs/source-of-truth/`.
 
 Formalet med denne filen er a gjore repoet raskere a navigere for mennesker og LLM-er, og redusere gjentatt "hvor bor dette?"-arbeid i nye chatter.
 
 ## 1. Hva dette repoet er
 
-Krimblokk / Force er et firekanals finger-force-maalesystem bygget rundt:
+GripSense er et firekanals finger-force-maalesystem bygget rundt:
 
 - dagens wired hardware-baseline: `CURRENT_UNO_HX711`
 - browser-UI i `web/`
@@ -17,7 +21,7 @@ Krimblokk / Force er et firekanals finger-force-maalesystem bygget rundt:
 
 Repoet er na `web`-first.
 
-Eventuell selskaps- eller merkevarekontekst utenfor repoet, som BS Climbing, er ikke del av denne repo-baselinen. Denne filen beskriver bare Force/Krimblokk-prosjektet.
+Eventuell selskaps- eller merkevarekontekst utenfor repoet, som BS Climbing, er ikke del av denne repo-baselinen. Denne filen beskriver bare GripSense-prosjektet.
 
 Produktrettet arbeid skal i praksis skje i:
 
@@ -28,24 +32,26 @@ Produktrettet arbeid skal i praksis skje i:
 
 Nar du starter pa nytt arbeid i repoet, les i denne rekkefolgen:
 
-1. `PROJECT_CONTEXT.md`
-2. `docs/PROJECT_STYRING.md`
-3. `docs/BENCHMARK_WORKOUT_ENGINE.md`
-4. `docs/TRAINING_PROTOCOL_DESIGN.md`
-5. `V1_5_NOTE.md`
-6. `README.md`
-7. denne filen: `REPO_MAP.md`
+1. `docs/source-of-truth/INDEX.md`
+2. `docs/source-of-truth/PRODUCT_SCOPE.md`
+3. `docs/source-of-truth/SYSTEM_ARCHITECTURE.md`
+4. `docs/source-of-truth/SOFTWARE_ARCHITECTURE.md`
+5. `docs/source-of-truth/METRICS_AND_PROTOCOLS.md`
+6. `V1_5_NOTE.md`
+7. `README.md`
+8. denne filen: `REPO_MAP.md`
 
 ## 3. Hoynivaa repo-struktur
 
 ```text
 Force/
 ├── docs/
+│   ├── decisions/
 │   ├── pitch/
-│   ├── BENCHMARK_WORKOUT_ENGINE.md
-│   ├── PROJECT_STYRING.md
+│   ├── reference/
+│   ├── source-of-truth/
 │   ├── STYRINGSMAL.md
-│   └── TRAINING_PROTOCOL_DESIGN.md
+│   └── plans/
 ├── firmware/
 │   └── firmware.ino
 ├── packages/
@@ -62,7 +68,6 @@ Force/
 │   ├── index.html
 │   └── tsconfig*.json
 ├── AGENTS.md
-├── PROJECT_CONTEXT.md
 ├── README.md
 ├── REPO_MAP.md
 ├── V1_5_NOTE.md
@@ -72,29 +77,17 @@ Force/
 
 ## 4. Root-filer
 
-## `PROJECT_CONTEXT.md`
-
-Viktigste kontekstfil i repoet. Definerer:
-
-- hva produktet er
-- hvorfor det finnes
-- aktiv hardware- og software-baseline
-- canonical terminology
-- canonical data contract
-- ikke-forhandlingsbar retning
-
 ## `README.md`
 
-Kort repo-intro for mennesker. Bruk den for:
+Kort repo-intro. Bruk den for:
 
-- rask forstaelse av produktbaselinen
+- rask forstaelse av repo og dokumentstruktur
 - quick start
-- hosted deployment-krav
-- pekere til videre dokumentasjon
+- peikere til `docs/source-of-truth/`
 
 ## `V1_5_NOTE.md`
 
-Kort overgangsnotat for `v1.5`. Bruk den for:
+Kort overgangsnotat for `v1.5`. Ikke autoritativt, men nyttig for:
 
 - web-first overgangen
 - hvorfor `web/` er eneste aktive operatorflate
@@ -126,39 +119,43 @@ Viktige scripts:
 
 ## 5. `/docs`-kart
 
-## `docs/PROJECT_STYRING.md`
+## `docs/source-of-truth/`
 
-Formelt styringsdokument for aktiv fase.
+Autoritativ dokumentasjon for prosjektet.
 
-Bruk det nar du trenger:
+Start her nar du trenger:
 
-- scope og guardrails
-- migreringsretning
-- aktive beslutninger
-- akseptkriterier og milepaeler
+- scope
+- governance
+- arkitektur
+- hardware-baseline
+- software-baseline
+- metrics og protokoller
+- validering
+- roadmap
 
-## `docs/BENCHMARK_WORKOUT_ENGINE.md`
+## `docs/reference/`
 
-Definerer benchmark- og workout-motoren.
+Avledet referansemateriale.
 
-Bruk det nar du jobber med:
+Bruk dette for:
 
-- benchmarkbiblioteket
-- workout-definisjoner
-- scoring
-- capability gating
-- prescription logic
+- AI quickstart
+- research/oppsummeringer
+- konkurrentnotater
+- supporting checklists
 
-## `docs/TRAINING_PROTOCOL_DESIGN.md`
+Hvis noe her spriker med `docs/source-of-truth/`, er det canonical-laget som gjelder.
 
-Definerer `TRAIN`-retningen.
+## `docs/decisions/`
 
-Bruk det nar du jobber med:
+ADR-er for varige repo- og prosessbeslutninger.
 
-- train runner
-- built-in workouts
-- target logic
-- treningsresultater og progresjon
+## `docs/plans/`
+
+Arbeidsplaner og utkast.
+
+Nyttige for paagaende arbeid, men ikke autoritative hvis de avviker fra `docs/source-of-truth/`.
 
 ## `docs/STYRINGSMAL.md`
 
@@ -354,7 +351,7 @@ npm --workspace web run pitch:pdf
 ## 10. Praktiske arbeidsregler
 
 - Hvis endringen er produktrettet, start i `web/` eller `packages/core/`.
-- Hvis endringen berorer hardware, transport eller migrering, les `PROJECT_CONTEXT.md` og `docs/PROJECT_STYRING.md` forst.
-- Hvis endringen berorer benchmarker eller trening, les ogsaa benchmark- og training-docs forst.
+- Hvis endringen berorer hardware, transport eller migrering, les `docs/source-of-truth/SYSTEM_ARCHITECTURE.md` og `docs/source-of-truth/HARDWARE_SPEC.md` forst.
+- Hvis endringen berorer benchmarker eller trening, les `docs/source-of-truth/METRICS_AND_PROTOCOLS.md` forst.
 - Bruk hardwareprofilnavnene `CURRENT_UNO_HX711` og `TARGET_XIAO_BLE_HX711`.
 - Ikke la total-force-only devices skape fake per-finger dataflyt.

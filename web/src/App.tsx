@@ -19,15 +19,15 @@ export default function App() {
       <MainContent>
         <Topbar onOpenProfilePage={() => setPage('profile')} />
         {page === 'live' ? (
-          <LivePage />
+          <LivePage onNavigate={setPage} />
         ) : (
           <PageContent>
             {page === 'train' && <TrainPage />}
             {page === 'test' && <TestPage />}
             {page === 'session' && <SessionPage />}
             {page === 'history' && <HistoryPage onNavigate={setPage} />}
-            {page === 'profile' && <ProfilePage />}
-            {page === 'settings' && <SettingsPage />}
+            {page === 'profile' && <ProfilePage onNavigate={setPage} />}
+            {page === 'settings' && <SettingsPage onNavigate={setPage} />}
           </PageContent>
         )}
       </MainContent>

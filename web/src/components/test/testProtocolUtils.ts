@@ -98,7 +98,7 @@ export function buildProtocolFromTemplate(template: CustomTestTemplate): TestPro
     capabilityRequirements: template.capabilityRequirements,
     warmup: template.warmup ?? [],
     cooldown: template.cooldown ?? [],
-    scoringModel: 'Custom benchmark uses the standard Krimblokk metrics for force, timing, and per-finger distribution.',
+    scoringModel: 'Custom benchmark uses the standard GripSense metrics for force, timing, and FingerMap™ per-finger distribution.',
     progressionRule: 'Repeat the same setup and compare score, symmetry, and stability before changing the template.',
     reportRelativeToBodyweight: template.target.mode === 'bodyweight_relative',
     repeater: buildRepeater(template),

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import type { Hand } from '../../types/force.ts';
 import { benchmarkCategoryLabel, testFamilyLabel } from './testConfig.ts';
 import { bestPeakOfResult } from './testAnalysis.ts';
@@ -60,18 +61,22 @@ export function TestPicker({
   onDeleteCustom,
   startDisabledReason,
 }: TestPickerProps) {
+  const [showAdvancedBenchmarks, setShowAdvancedBenchmarks] = useState(false);
   const selectedBuiltIn = selectedRef.kind === 'builtin'
     ? TEST_LIBRARY.find(protocol => protocol.id === selectedRef.id) ?? TEST_LIBRARY[0]
     : null;
   const selectedCustom = selectedRef.kind === 'custom'
     ? customTemplates.find(template => template.id === selectedRef.id) ?? null
     : null;
-  const groupedProtocols = Object.entries(
-    TEST_LIBRARY.reduce<Record<string, typeof TEST_LIBRARY>>((acc, protocol) => {
-      acc[protocol.category] = [...(acc[protocol.category] ?? []), protocol];
-      return acc;
-    }, {}),
+  const coreProtocols = useMemo(
+    () => TEST_LIBRARY.filter(protocol => protocol.tier === 'Core'),
+    [],
   );
+  const advancedProtocols = useMemo(
+    () => TEST_LIBRARY.filter(protocol => protocol.tier === 'Advanced'),
+    [],
+  );
+  const advancedOpen = showAdvancedBenchmarks || selectedBuiltIn?.tier === 'Advanced' || selectedRef.kind === 'custom';
 
   return (
     <div className="space-y-4">
@@ -79,7 +84,7 @@ export function TestPicker({
         <div>
           <h2 className="text-lg font-semibold">Test Library</h2>
           <p className="text-xs text-muted mt-1">
-            `TEST` is the formal benchmark surface. Pick a structured protocol for {hand} hand on {activeProfileName}, or build a custom template for repeatable tracking over time.
+            `TEST` is the formal benchmark surface. Start with the core benchmarks for {hand} hand on {activeProfileName}, then expand into advanced or custom protocols when you need a narrower question.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -126,18 +131,6 @@ export function TestPicker({
             />
             <span className="text-xs font-medium">Alternate Hands</span>
           </label>
-          <button
-            onClick={onCreateCustom}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-alt border border-border text-text"
-          >
-            New Custom Template
-          </button>
-          <button
-            onClick={onOpenAiBuilder}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/15 border border-primary/25 text-primary"
-          >
-            AI Test Builder
-          </button>
         </div>
       </div>
 
@@ -145,19 +138,111 @@ export function TestPicker({
         <div className="space-y-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Benchmark Library</h3>
-              <span className="text-xs text-muted">{TEST_LIBRARY.length} protocols</span>
+              <h3 className="text-sm font-semibold">Core Benchmarks</h3>
+              <span className="text-xs text-muted">{coreProtocols.length} core protocols</span>
             </div>
-            <div className="space-y-4">
-              {groupedProtocols.map(([category, protocols]) => (
-                <div key={category} className="space-y-3">
-                  <div className="px-1">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      {benchmarkCategoryLabel(protocols[0].category)}
-                    </h4>
+            <div className="space-y-3">
+              {coreProtocols.map(protocol => {
+                const latest = latestByProtocol[protocol.id as TestId];
+                const selectedCard = isSelected(selectedRef, 'builtin', protocol.id);
+                return (
+                  <button
+                    key={protocol.id}
+                    onClick={() => onSelect({ kind: 'builtin', id: protocol.id })}
+                    className={`text-left bg-surface rounded-xl border p-4 transition-colors ${
+                      selectedCard ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold">{protocol.name}</div>
+                        <div className="text-xs text-muted mt-1">{protocol.purpose}</div>
+                      </div>
+                      <span className={`text-[10px] px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${tierClass(protocol.tier)}`}>
+                        {protocol.tier}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                      <div className="bg-surface-alt rounded-lg px-3 py-2">
+                        <div className="text-muted">Category</div>
+                        <div className="font-semibold mt-0.5">{benchmarkCategoryLabel(protocol.category)}</div>
+                      </div>
+                      <div className="bg-surface-alt rounded-lg px-3 py-2">
+                        <div className="text-muted">Duration</div>
+                        <div className="font-semibold mt-0.5">{protocol.durationSec}s</div>
+                      </div>
+                      <div className="bg-surface-alt rounded-lg px-3 py-2">
+                        <div className="text-muted">Sets</div>
+                        <div className="font-semibold mt-0.5">{protocol.attemptCount}</div>
+                      </div>
+                      <div className="bg-surface-alt rounded-lg px-3 py-2">
+                        <div className="text-muted">Rest</div>
+                        <div className="font-semibold mt-0.5">{protocol.restSec}s</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-border text-xs">
+                      {latest ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted">Latest ({latest.hand})</span>
+                          <span className="font-semibold tabular-nums">
+                            {bestPeakOfResult(latest).toFixed(1)} kg
+                            {latest.summary.normalizedPeakKgPerKgBodyweight !== null && latest.summary.normalizedPeakKgPerKgBodyweight !== undefined
+                              ? ` · ${latest.summary.normalizedPeakKgPerKgBodyweight.toFixed(2)} x BW`
+                              : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted/70">No previous result</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Advanced Benchmarks & Custom Tools</div>
+                <div className="text-xs text-muted mt-1">
+                  Show more specific protocols and builder tools when the core library is not enough.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAdvancedBenchmarks(current => !current)}
+                className="rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs font-medium text-text"
+              >
+                {advancedOpen ? 'Hide Advanced' : `Show Advanced (${advancedProtocols.length + customTemplates.length})`}
+              </button>
+            </div>
+
+            {advancedOpen && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={onCreateCustom}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-alt border border-border text-text"
+                  >
+                    New Custom Template
+                  </button>
+                  <button
+                    onClick={onOpenAiBuilder}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/15 border border-primary/25 text-primary"
+                  >
+                    AI Test Builder
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Advanced Benchmarks</h4>
+                    <span className="text-xs text-muted">{advancedProtocols.length} protocols</span>
                   </div>
                   <div className="space-y-3">
-                    {protocols.map(protocol => {
+                    {advancedProtocols.map(protocol => {
                       const latest = latestByProtocol[protocol.id as TestId];
                       const selectedCard = isSelected(selectedRef, 'builtin', protocol.id);
                       return (
@@ -177,32 +262,11 @@ export function TestPicker({
                               {protocol.tier}
                             </span>
                           </div>
-
-                          <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-                            <div className="bg-surface-alt rounded-lg px-3 py-2">
-                              <div className="text-muted">Duration</div>
-                              <div className="font-semibold mt-0.5">{protocol.durationSec}s</div>
-                            </div>
-                            <div className="bg-surface-alt rounded-lg px-3 py-2">
-                              <div className="text-muted">Sets</div>
-                              <div className="font-semibold mt-0.5">{protocol.attemptCount}</div>
-                            </div>
-                            <div className="bg-surface-alt rounded-lg px-3 py-2">
-                              <div className="text-muted">Rest</div>
-                              <div className="font-semibold mt-0.5">{protocol.restSec}s</div>
-                            </div>
-                          </div>
-
                           <div className="mt-3 pt-3 border-t border-border text-xs">
                             {latest ? (
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-muted">Latest ({latest.hand})</span>
-                                <span className="font-semibold tabular-nums">
-                                  {bestPeakOfResult(latest).toFixed(1)} kg
-                                  {latest.summary.normalizedPeakKgPerKgBodyweight !== null && latest.summary.normalizedPeakKgPerKgBodyweight !== undefined
-                                    ? ` · ${latest.summary.normalizedPeakKgPerKgBodyweight.toFixed(2)} x BW`
-                                    : ''}
-                                </span>
+                                <span className="font-semibold tabular-nums">{bestPeakOfResult(latest).toFixed(1)} kg</span>
                               </div>
                             ) : (
                               <span className="text-muted/70">No previous result</span>
@@ -213,98 +277,98 @@ export function TestPicker({
                     })}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Custom Templates</h3>
-              <span className="text-xs text-muted">{customTemplates.length} saved</span>
-            </div>
-            {customTemplates.length === 0 ? (
-              <div className="bg-surface rounded-xl border border-border p-6 text-sm text-muted">
-                No custom templates yet. Create one to define your own set timing, targets, live panels and result dashboard.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {customTemplates.map(template => {
-                  const latest = latestCustomByTemplateId[template.id];
-                  const selectedCard = isSelected(selectedRef, 'custom', template.id);
-                  const intervalLabel = template.interval?.enabled
-                    ? `${template.interval.workSec}:${template.interval.restSec} x ${template.interval.cycles}`
-                    : 'Continuous';
-                  return (
-                    <div
-                      key={template.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onSelect({ kind: 'custom', id: template.id })}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          onSelect({ kind: 'custom', id: template.id });
-                        }
-                      }}
-                      className={`text-left bg-surface rounded-xl border p-4 transition-colors cursor-pointer ${
-                        selectedCard ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold">{template.name}</div>
-                          <div className="text-xs text-muted mt-1">
-                            {template.purpose || 'Custom template'}
-                          </div>
-                        </div>
-                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${tierClass('Custom')}`}>
-                          Custom
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
-                        <div className="bg-surface-alt rounded-lg px-3 py-2">
-                          <div className="text-muted">Family</div>
-                          <div className="font-semibold mt-0.5">{testFamilyLabel(template.family)}</div>
-                        </div>
-                        <div className="bg-surface-alt rounded-lg px-3 py-2">
-                          <div className="text-muted">Sets</div>
-                          <div className="font-semibold mt-0.5">{template.attemptCount}</div>
-                        </div>
-                        <div className="bg-surface-alt rounded-lg px-3 py-2">
-                          <div className="text-muted">Work</div>
-                          <div className="font-semibold mt-0.5">{template.workSec}s</div>
-                        </div>
-                        <div className="bg-surface-alt rounded-lg px-3 py-2">
-                          <div className="text-muted">Intervals</div>
-                          <div className="font-semibold mt-0.5">{intervalLabel}</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3">
-                        {latest ? (
-                          <div className="text-xs">
-                            <span className="text-muted">Latest</span>{' '}
-                            <span className="font-semibold tabular-nums">{bestPeakOfResult(latest).toFixed(1)} kg</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted/70">No previous result</span>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <button onClick={(event) => { event.stopPropagation(); onEditCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-surface-alt border border-border text-text">
-                            Edit
-                          </button>
-                          <button onClick={(event) => { event.stopPropagation(); onDuplicateCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-surface-alt border border-border text-text">
-                            Duplicate
-                          </button>
-                          <button onClick={(event) => { event.stopPropagation(); onDeleteCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-danger/15 text-danger border border-danger/30">
-                            Delete
-                          </button>
-                        </div>
-                      </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Custom Templates</h4>
+                    <span className="text-xs text-muted">{customTemplates.length} saved</span>
+                  </div>
+                  {customTemplates.length === 0 ? (
+                    <div className="bg-surface-alt rounded-xl border border-border p-6 text-sm text-muted">
+                      No custom templates yet. Create one to define your own timing, targets, live panels and result dashboard.
                     </div>
-                  );
-                })}
+                  ) : (
+                    <div className="space-y-3">
+                      {customTemplates.map(template => {
+                        const latest = latestCustomByTemplateId[template.id];
+                        const selectedCard = isSelected(selectedRef, 'custom', template.id);
+                        const intervalLabel = template.interval?.enabled
+                          ? `${template.interval.workSec}:${template.interval.restSec} x ${template.interval.cycles}`
+                          : 'Continuous';
+                        return (
+                          <div
+                            key={template.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => onSelect({ kind: 'custom', id: template.id })}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onSelect({ kind: 'custom', id: template.id });
+                              }
+                            }}
+                            className={`text-left bg-surface rounded-xl border p-4 transition-colors cursor-pointer ${
+                              selectedCard ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold">{template.name}</div>
+                                <div className="text-xs text-muted mt-1">
+                                  {template.purpose || 'Custom template'}
+                                </div>
+                              </div>
+                              <span className={`text-[10px] px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${tierClass('Custom')}`}>
+                                Custom
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
+                              <div className="bg-surface-alt rounded-lg px-3 py-2">
+                                <div className="text-muted">Family</div>
+                                <div className="font-semibold mt-0.5">{testFamilyLabel(template.family)}</div>
+                              </div>
+                              <div className="bg-surface-alt rounded-lg px-3 py-2">
+                                <div className="text-muted">Sets</div>
+                                <div className="font-semibold mt-0.5">{template.attemptCount}</div>
+                              </div>
+                              <div className="bg-surface-alt rounded-lg px-3 py-2">
+                                <div className="text-muted">Work</div>
+                                <div className="font-semibold mt-0.5">{template.workSec}s</div>
+                              </div>
+                              <div className="bg-surface-alt rounded-lg px-3 py-2">
+                                <div className="text-muted">Intervals</div>
+                                <div className="font-semibold mt-0.5">{intervalLabel}</div>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3">
+                              {latest ? (
+                                <div className="text-xs">
+                                  <span className="text-muted">Latest</span>{' '}
+                                  <span className="font-semibold tabular-nums">{bestPeakOfResult(latest).toFixed(1)} kg</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted/70">No previous result</span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <button onClick={(event) => { event.stopPropagation(); onEditCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-surface-alt border border-border text-text">
+                                  Edit
+                                </button>
+                                <button onClick={(event) => { event.stopPropagation(); onDuplicateCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-surface-alt border border-border text-text">
+                                  Duplicate
+                                </button>
+                                <button onClick={(event) => { event.stopPropagation(); onDeleteCustom(template); }} className="px-2 py-1 rounded text-xs font-medium bg-danger/15 text-danger border border-danger/30">
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

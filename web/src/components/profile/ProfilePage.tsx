@@ -1,31 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAppStore } from '../../stores/appStore.ts';
-import { loadTestResults } from '../test/testStorage.ts';
 import { bestPeakOfResult } from '../test/testAnalysis.ts';
 import { listTrainingSessions } from '../train/trainStorage.ts';
 import { EmptyState } from '../shared/EmptyState.tsx';
 import { formatDateTime } from '../shared/formatDateTime.ts';
-import type { CompletedTestResult } from '../test/types.ts';
 import { ProfileBenchmarkReferencesSection } from './ProfileBenchmarkReferencesSection.tsx';
 import type { TrainSessionMeta } from '../train/types.ts';
 import { ProfileEditorSection } from './ProfileEditorSection.tsx';
+import { SetupChecklistCard } from '../shared/SetupChecklistCard.tsx';
+import { useSetupReadiness } from '../../setup/useSetupReadiness.ts';
+import type { PageId } from '../layout/Sidebar.tsx';
 
-export function ProfilePage() {
-  const activeProfile = useAppStore(s => s.profiles.find(profile => profile.profileId === s.activeProfileId) ?? null);
-  const [testResults, setTestResults] = useState<CompletedTestResult[]>(() => loadTestResults());
+interface ProfilePageProps {
+  onNavigate?: (page: PageId) => void;
+}
+
+export function ProfilePage({ onNavigate }: ProfilePageProps) {
+  const {
+    activeProfile,
+    profileTestResults,
+    readinessReport,
+    refreshTestResults,
+  } = useSetupReadiness();
   const [trainingSessions, setTrainingSessions] = useState<TrainSessionMeta[]>([]);
 
   useEffect(() => {
     void listTrainingSessions().then(setTrainingSessions);
   }, []);
-
-  const profileTests = useMemo(() => (
-    activeProfile
-      ? testResults
-        .filter(result => result.profile?.profileId === activeProfile.profileId)
-        .sort((a, b) => b.completedAtIso.localeCompare(a.completedAtIso))
-      : []
-  ), [activeProfile, testResults]);
 
   const profileTraining = useMemo(() => (
     activeProfile
@@ -34,12 +34,18 @@ export function ProfilePage() {
   ), [activeProfile, trainingSessions]);
 
   const latestMaxResult = useMemo(
-    () => profileTests.find(result => result.protocolId === 'standard_max') ?? null,
-    [profileTests],
+    () => profileTestResults.find(result => result.protocolId === 'standard_max') ?? null,
+    [profileTestResults],
   );
 
   const latestMaxPeak = latestMaxResult ? bestPeakOfResult(latestMaxResult) : null;
   const injuredCount = activeProfile?.injuredFingers.filter(Boolean).length ?? 0;
+  const profileName = activeProfile?.name.trim() || 'Unnamed profile';
+  const injurySummary = injuredCount > 0
+    ? `${injuredCount} fingers flagged`
+    : activeProfile?.injuryNotes.trim()
+      ? 'Notes saved'
+      : 'No injury flags yet';
 
   return (
     <div className="h-full flex flex-col gap-4 overflow-auto">
@@ -52,7 +58,7 @@ export function ProfilePage() {
         </div>
         <button
           onClick={() => {
-            setTestResults(loadTestResults());
+            refreshTestResults();
             void listTrainingSessions().then(setTrainingSessions);
           }}
           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-alt text-muted hover:text-text border border-border transition-colors"
@@ -61,18 +67,13 @@ export function ProfilePage() {
         </button>
       </div>
 
-      <ProfileEditorSection />
-      <ProfileBenchmarkReferencesSection
-        key={`${activeProfile?.profileId ?? 'none'}:${activeProfile?.updatedAtIso ?? 'none'}`}
-        activeProfile={activeProfile}
-        testResults={profileTests}
-      />
+      <SetupChecklistCard report={readinessReport} onNavigate={onNavigate} showWhenReady />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <StatCard
-          label="Latest Max Test"
-          value={latestMaxPeak !== null ? `${latestMaxPeak.toFixed(1)} kg` : 'Missing'}
-          detail={latestMaxResult ? formatDateTime(latestMaxResult.completedAtIso) : 'Run Standard Max to unlock auto targets'}
+          label="Profile Name"
+          value={profileName}
+          detail={activeProfile?.createdAtIso ? `Created ${formatDateTime(activeProfile.createdAtIso)}` : 'Save a named profile to keep history organized'}
         />
         <StatCard
           label="Body Metrics"
@@ -84,15 +85,17 @@ export function ProfilePage() {
         />
         <StatCard
           label="Injury Context"
-          value={injuredCount > 0 ? `${injuredCount} fingers flagged` : 'No fingers flagged'}
+          value={injurySummary}
           detail={activeProfile?.injuryNotes.trim() ? activeProfile.injuryNotes : 'No injury notes saved'}
         />
         <StatCard
-          label="Training Sessions"
-          value={String(profileTraining.length)}
-          detail={profileTraining[0] ? `Latest: ${profileTraining[0].presetName}` : 'No training history yet'}
+          label="My Numbers"
+          value={latestMaxPeak !== null ? `${latestMaxPeak.toFixed(1)} kg` : 'Benchmark missing'}
+          detail={latestMaxResult ? `Latest max: ${formatDateTime(latestMaxResult.completedAtIso)}` : 'Run Standard Max in TEST to unlock baseline numbers'}
         />
       </div>
+
+      <ProfileEditorSection />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -100,7 +103,7 @@ export function ProfilePage() {
             <h3 className="text-sm font-semibold">Recent Tests</h3>
             <p className="text-xs text-muted mt-1">Latest benchmark results for this profile.</p>
           </div>
-          {profileTests.length === 0 ? (
+          {profileTestResults.length === 0 ? (
             <EmptyState message="No test results saved for this profile yet." />
           ) : (
             <table className="w-full text-sm">
@@ -113,7 +116,7 @@ export function ProfilePage() {
                 </tr>
               </thead>
               <tbody>
-                {profileTests.slice(0, 6).map(result => (
+                {profileTestResults.slice(0, 6).map(result => (
                   <tr key={result.resultId} className="border-t border-border">
                     <td className="px-4 py-2.5 text-muted">{formatDateTime(result.completedAtIso)}</td>
                     <td className="px-4 py-2.5">{result.protocolName}</td>
@@ -157,6 +160,27 @@ export function ProfilePage() {
           )}
         </div>
       </div>
+
+      <details className="rounded-xl border border-border bg-surface">
+        <summary className="cursor-pointer list-none px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Benchmark References</h3>
+              <p className="mt-1 text-xs text-muted">
+                Keep manual benchmark references as a secondary setup surface. Test history remains the preferred source of truth.
+              </p>
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Secondary</span>
+          </div>
+        </summary>
+        <div className="border-t border-border p-4">
+          <ProfileBenchmarkReferencesSection
+            key={`${activeProfile?.profileId ?? 'none'}:${activeProfile?.updatedAtIso ?? 'none'}`}
+            activeProfile={activeProfile}
+            testResults={profileTestResults}
+          />
+        </div>
+      </details>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { FINGER_NAMES } from '../../constants/fingers.ts';
+import type { TrainPresetId } from '../train/types.ts';
 import { bestPeakOfResult } from './testAnalysis.ts';
-import type { CompletedTestResult, TestId } from './types.ts';
+import type { CompletedTestResult } from './types.ts';
 
 type CoachingPriority = 'High' | 'Medium' | 'Low';
 
@@ -13,8 +14,9 @@ export interface AiCoachingFocusArea {
   evidence: string[];
 }
 
-export interface AiCoachingNextStep {
-  protocolId: TestId;
+export interface AiCoachingRecommendedAction {
+  kind: 'test' | 'train';
+  actionId: string;
   label: string;
   reason: string;
 }
@@ -23,10 +25,12 @@ export interface AiCoachingReport {
   headline: string;
   overview: string;
   confidence: 'Moderate' | 'Low';
+  primaryInsight: AiCoachingFocusArea;
   focusAreas: AiCoachingFocusArea[];
+  trendNote: string | null;
   positives: string[];
   watchouts: string[];
-  nextStep: AiCoachingNextStep;
+  recommendedAction: AiCoachingRecommendedAction;
 }
 
 interface FocusCandidate extends AiCoachingFocusArea {
@@ -48,11 +52,12 @@ function formatPct(value: number, digits = 1): string {
   return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
 }
 
-function protocolLabel(protocolId: string): string {
-  if (protocolId === 'distribution_hold') return 'Distribution Hold';
-  if (protocolId === 'advanced_repeater') return 'Advanced Repeater';
-  if (protocolId === 'explosive_pull') return 'Explosive Pull';
-  return 'Standard Max Pull';
+function workoutLabel(workoutId: TrainPresetId): string {
+  if (workoutId === 'recruitment_rfd_clusters') return 'Recruitment Clusters';
+  if (workoutId === 'repeated_strength_7_53') return 'Repeated Strength 7:53';
+  if (workoutId === 'health_capacity_density') return 'Health Capacity Density';
+  if (workoutId === 'strength_10s') return 'Strength 10s';
+  return 'Guided Session';
 }
 
 export function buildAiCoachingReport(
@@ -276,11 +281,38 @@ export function buildAiCoachingReport(
     watchouts.push('Experimental metrics are informative, but they should not override the core force and repeatability signals.');
   }
 
-  const primaryFocusId = focusAreas[0]?.id;
-  let nextProtocolId: TestId = 'standard_max';
-  if (primaryFocusId === 'recruitment') nextProtocolId = 'distribution_hold';
-  else if (primaryFocusId === 'fatigue') nextProtocolId = 'advanced_repeater';
-  else if (primaryFocusId === 'explosive') nextProtocolId = 'explosive_pull';
+  const primaryInsight = focusAreas[0];
+  const primaryFocusId = primaryInsight.id;
+  let recommendedAction: AiCoachingRecommendedAction;
+  if (primaryFocusId === 'recruitment' || primaryFocusId === 'explosive') {
+    recommendedAction = {
+      kind: 'train',
+      actionId: 'recruitment_rfd_clusters',
+      label: workoutLabel('recruitment_rfd_clusters'),
+      reason: 'Best next session for improving recruitment speed without turning the follow-up into another max benchmark.',
+    };
+  } else if (primaryFocusId === 'fatigue') {
+    recommendedAction = {
+      kind: 'train',
+      actionId: 'repeated_strength_7_53',
+      label: workoutLabel('repeated_strength_7_53'),
+      reason: 'Best next session for cleaning up rep-to-rep decay and building repeatable high-force output.',
+    };
+  } else if (primaryFocusId === 'stability' || primaryFocusId === 'asymmetry') {
+    recommendedAction = {
+      kind: 'train',
+      actionId: 'health_capacity_density',
+      label: workoutLabel('health_capacity_density'),
+      reason: 'Best next session for improving control, steadiness, and safer finger sharing before pushing harder again.',
+    };
+  } else {
+    recommendedAction = {
+      kind: 'train',
+      actionId: 'strength_10s',
+      label: workoutLabel('strength_10s'),
+      reason: 'Best default anchor session when the profile looks stable enough to keep building clean strength.',
+    };
+  }
 
   const confidence =
     lastSameProtocol || asymmetryPct !== null
@@ -305,25 +337,19 @@ export function buildAiCoachingReport(
   if (trendVsLastPct !== null) {
     overviewParts.push(`${formatPct(trendVsLastPct)} vs last same-protocol test`);
   }
+  const trendNote = trendVsLastPct !== null
+    ? `Peak force ${trendVsLastPct >= 0 ? 'up' : 'down'} ${Math.abs(trendVsLastPct).toFixed(1)}% versus your last ${currentResult.protocolName.toLowerCase()} on this hand.`
+    : null;
 
   return {
     headline,
     overview: overviewParts.join(' | '),
     confidence,
+    primaryInsight,
     focusAreas,
+    trendNote,
     positives: positives.slice(0, 3),
     watchouts: watchouts.slice(0, 3),
-    nextStep: {
-      protocolId: nextProtocolId,
-      label: protocolLabel(nextProtocolId),
-      reason:
-        nextProtocolId === 'distribution_hold'
-          ? 'Best next check for evening out finger contribution under load.'
-          : nextProtocolId === 'advanced_repeater'
-            ? 'Best next check for fatigue resistance and late-set drop-off.'
-            : nextProtocolId === 'explosive_pull'
-              ? 'Best next check for how quickly force is expressed.'
-              : 'Best next check for clean peak-force progression and repeatability.',
-    },
+    recommendedAction,
   };
 }

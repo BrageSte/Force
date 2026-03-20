@@ -1,6 +1,6 @@
-# Krimblokk Web
+# GripSense Web
 
-Primary product surface for Krimblokk. This browser application runs against the current `CURRENT_UNO_HX711` hardware profile over Web Serial and also supports Tindeq Progressor as a total-force-only BLE source.
+Primary product surface for GripSense. This browser application runs against the current `CURRENT_UNO_HX711` hardware profile over Web Serial and also supports Tindeq Progressor as a total-force-only BLE source.
 
 ## Stack
 

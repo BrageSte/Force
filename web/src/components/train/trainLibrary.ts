@@ -1,5 +1,5 @@
 import type { BenchmarkCategory, GripType, WorkoutModality } from '@krimblokk/core';
-import type { TrainPresetId, TrainProtocol } from './types.ts';
+import type { TrainPresetId, TrainProtocol, TrainTier } from './types.ts';
 
 const TOTAL_ONLY_CAPABILITY = {
   requiresTotalForce: true,
@@ -45,6 +45,7 @@ function createTrainProtocol(args: {
   id: TrainPresetId;
   name: string;
   shortName: string;
+  tier: TrainTier;
   category: BenchmarkCategory;
   athleteLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite';
   gripType: GripType;
@@ -77,6 +78,7 @@ function createTrainProtocol(args: {
   return {
     id: args.id,
     kind: 'prescribed',
+    tier: args.tier,
     workoutKind: 'builtin',
     name: args.name,
     shortName: args.shortName,
@@ -129,6 +131,7 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'strength_10s',
     name: 'Strength 10s',
     shortName: 'Strength 10s',
+    tier: 'Core',
     category: 'max_strength',
     athleteLevel: 'intermediate',
     gripType: 'half_crimp',
@@ -152,6 +155,7 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'repeated_strength_7_53',
     name: 'Repeated Strength 7:53',
     shortName: '7:53 Strength',
+    tier: 'Advanced',
     category: 'repeated_max_strength',
     athleteLevel: 'advanced',
     gripType: 'half_crimp',
@@ -175,13 +179,14 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'recruitment_rfd_clusters',
     name: 'Recruitment Clusters',
     shortName: 'RFD Clusters',
+    tier: 'Advanced',
     category: 'recruitment_rfd',
     athleteLevel: 'advanced',
     gripType: 'ergonomic_block',
     modality: 'no_hang_pull',
     trainingGoal: 'Improve rapid force development and active finger flexion with safer cluster pulls.',
     targetIntensityLogic: 'Short explosive pulls at 55% of the latest max-strength benchmark or manual target.',
-    sourceBasis: 'Camp 4 / Tyler Nelson style recruitment and active flexion logic adapted to Krimblokk.',
+    sourceBasis: 'Camp 4 / Tyler Nelson style recruitment and active flexion logic adapted to GripSense.',
     benchmarkSourceId: 'explosive_pull',
     benchmarkSourceLabel: 'Recruitment / RFD Benchmark',
     recommendationTags: ['rfd', 'recruitment', 'explosive'],
@@ -198,13 +203,14 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'strength_endurance_repeaters',
     name: 'Strength-Endurance Repeaters',
     shortName: 'Repeaters 7:3',
+    tier: 'Core',
     category: 'strength_endurance',
     athleteLevel: 'intermediate',
     gripType: 'open_hand',
     modality: 'edge',
     trainingGoal: 'Build repeatable submax force while keeping finger contribution stable under fatigue.',
     targetIntensityLogic: '70% of the latest max-strength benchmark with 7:3 repeater structure.',
-    sourceBasis: 'Lattice and Horst repeater logic adapted to Krimblokk feedback.',
+    sourceBasis: 'Lattice and Horst repeater logic adapted to GripSense feedback.',
     benchmarkSourceId: 'advanced_repeater',
     benchmarkSourceLabel: 'Strength-Endurance Benchmark',
     recommendationTags: ['strength_endurance', 'repeaters', 'density'],
@@ -221,6 +227,7 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'health_capacity_density',
     name: 'Health Capacity Density',
     shortName: 'Capacity Density',
+    tier: 'Core',
     category: 'health_capacity',
     athleteLevel: 'beginner',
     gripType: 'ergonomic_block',
@@ -244,13 +251,14 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'individualized_force_curve',
     name: 'Force Curve Builder',
     shortName: 'Curve Builder',
+    tier: 'Advanced',
     category: 'force_curve',
     athleteLevel: 'advanced',
     gripType: 'open_hand',
     modality: 'ergonomic_block',
     trainingGoal: 'Train the specific region of the force curve that broke down in the latest benchmark profile.',
     targetIntensityLogic: '65% of latest max-strength benchmark with emphasis on stable finger cooperation.',
-    sourceBasis: 'Hand of God / Grip Gains-inspired individualized prescription using Krimblokk force curves.',
+    sourceBasis: 'Hand of God / Grip Gains-inspired individualized prescription using GripSense FingerMap™ force curves.',
     benchmarkSourceId: 'force_curve_profile',
     benchmarkSourceLabel: 'Individual Force Curve Benchmark',
     recommendationTags: ['individualized', 'force_curve', 'distribution'],
@@ -267,13 +275,14 @@ export const TRAIN_LIBRARY: TrainProtocol[] = [
     id: 'finger_bias_accessory',
     name: 'Finger Bias Accessory',
     shortName: 'Finger Bias',
+    tier: 'Advanced',
     category: 'health_capacity',
     athleteLevel: 'intermediate',
     gripType: 'ergonomic_block',
     modality: 'no_hang_pull',
     trainingGoal: 'Give a weak or dropout-prone finger cleaner work without pushing peak system fatigue too high.',
     targetIntensityLogic: '50% of latest max-strength benchmark with lighter accessory volume.',
-    sourceBasis: 'Per-finger individualized accessory logic enabled by Krimblokk finger distribution data.',
+    sourceBasis: 'Per-finger individualized accessory logic enabled by GripSense FingerMap™ finger distribution data.',
     benchmarkSourceId: 'force_curve_profile',
     benchmarkSourceLabel: 'Individual Force Curve Benchmark',
     recommendationTags: ['weak_finger', 'accessory', 'compensation_control'],

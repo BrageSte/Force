@@ -23,6 +23,7 @@ export type TrainPresetId =
   | 'individualized_force_curve'
   | 'finger_bias_accessory';
 
+export type TrainTier = 'Core' | 'Advanced';
 export type TrainWorkoutId = TrainPresetId | string;
 export type TrainWorkoutKind = 'builtin' | 'custom';
 export type TrainTargetMode = 'auto_from_latest_test' | 'manual' | 'bodyweight_relative' | 'auto_from_first_set';
@@ -43,6 +44,7 @@ export interface TrainBlock {
 export interface TrainProtocol extends Omit<TrainingWorkoutDefinition, 'kind' | 'blocks' | 'id'> {
   id: TrainPresetId;
   kind: 'prescribed';
+  tier: TrainTier;
   workoutKind: TrainWorkoutKind;
   blocks: TrainBlock[];
   benchmarkSourceId?: string;

@@ -83,6 +83,22 @@ describe('LivePage', () => {
     expect(buttonByText(container, 'Connect device')).toBeInstanceOf(HTMLButtonElement)
     expect(container.textContent).toContain('Start here:')
     expect(container.textContent).toContain('Device disconnected')
+    expect(container.textContent).toContain('Setup checklist')
+    expect(container.textContent).toContain('Run your first core benchmark')
+  })
+
+  it('routes checklist actions toward the requested setup surface', async () => {
+    const onNavigate = vi.fn()
+
+    await act(async () => {
+      root.render(<LivePage onNavigate={onNavigate} />)
+    })
+
+    await act(async () => {
+      buttonByText(container, 'Open PROFILE').click()
+    })
+
+    expect(onNavigate).toHaveBeenCalledWith('profile')
   })
 
   it('keeps the quick mode UI to one active detail surface', async () => {

@@ -19,8 +19,8 @@ export function Sidebar({ activePage, onNavigate }: SidebarProps) {
   return (
     <aside className="w-52 shrink-0 bg-surface border-r border-border flex flex-col">
       <div className="px-5 py-6">
-        <h1 className="text-lg font-bold tracking-wide text-text">FingerForce</h1>
-        <p className="text-xs text-muted mt-0.5">Climbing Force Analyzer</p>
+        <h1 className="text-lg font-bold tracking-wide text-text">GripSense</h1>
+        <p className="text-xs text-muted mt-0.5">Powered by FingerMap™</p>
       </div>
       <nav className="flex-1 px-3 space-y-1">
         {NAV_ITEMS.map(item => (

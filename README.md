@@ -1,20 +1,37 @@
-# Krimblokk v1.5
+# GripSense
 
-Krimblokk is a four-channel finger-force measurement system for structured testing, live capture, guided training, and session review. This repository is now web-only: `web/` is the product surface, `packages/core/` holds shared domain logic, and `firmware/` contains the Arduino firmware for the current wired hardware.
+GripSense is a four-channel finger-force measurement product for climbing-related testing, training, and follow-up over time. Its differentiator is `FingerMap™`: per-finger force measurement and analysis across Index, Middle, Ring, and Pinky.
 
-Start with [V1_5_NOTE.md](V1_5_NOTE.md), then read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the authoritative product and hardware baseline. For architecture and roadmap direction, read [docs/PROJECT_STYRING.md](docs/PROJECT_STYRING.md). Benchmark and training behavior are documented in [docs/BENCHMARK_WORKOUT_ENGINE.md](docs/BENCHMARK_WORKOUT_ENGINE.md) and [docs/TRAINING_PROTOCOL_DESIGN.md](docs/TRAINING_PROTOCOL_DESIGN.md). For faster repo navigation, use [REPO_MAP.md](REPO_MAP.md).
+This repository is the primary source of truth for the project. Inside the repo, the authoritative documentation lives in `docs/source-of-truth/`.
 
-## Current Product Baseline
+## Start Here
 
-- hardware profile `CURRENT_UNO_HX711`
-- Arduino UNO + 4 x HX711 + 4 x load cell channels
-- wired serial transport for full per-finger capture
-- Tindeq Progressor support for total-force-only BLE capture
-- `web/` as the only operator UI in this repository
+Read these first:
 
-## Repository Layout
+1. `docs/source-of-truth/INDEX.md`
+2. `docs/source-of-truth/PROJECT_GOVERNANCE.md`
+3. `docs/source-of-truth/PRODUCT_SCOPE.md`
+4. `docs/source-of-truth/SYSTEM_ARCHITECTURE.md`
+
+Supporting material lives in `docs/reference/`. It is useful for onboarding, research, and AI quickstarts, but it is not authoritative if it conflicts with `docs/source-of-truth/`.
+
+## Current Repo Baseline
+
+- Active hardware profile: `CURRENT_UNO_HX711`
+- Current hardware: Arduino UNO + 4 x HX711 + 4 x load cells over USB serial
+- Active product surface: `web/`
+- Shared domain layer: `packages/core/`
+- Current firmware baseline: `firmware/firmware.ino`
+- Supported compatibility device: Tindeq Progressor as total-force-only
+
+## Repo Layout
 
 ```text
+docs/
+  source-of-truth/
+  reference/
+  decisions/
+
 firmware/
   firmware.ino
 
@@ -26,24 +43,12 @@ web/
   src/
 ```
 
-## Active Surfaces
+## Documentation Rules
 
-- `web/`
-  - browser application for live capture, test workflows, training workflows, history, and analysis
-  - secure-context app for Web Serial and Web Bluetooth-compatible device flows
-- `packages/core/`
-  - shared TypeScript parsing, calibration, smoothing, segmentation, metrics, workouts, and session analysis
-- `firmware/`
-  - Arduino firmware for `CURRENT_UNO_HX711`
-
-## Canonical Transport Contract
-
-- newline-delimited text
-- CSV with timestamp: `t_ms,f0,f1,f2,f3`
-- CSV without timestamp: `f0,f1,f2,f3`
-- JSON: `{"t_ms":123,"f":[f0,f1,f2,f3]}`
-- one active stream mode per connection: `raw` or `kg`
-- status/debug lines start with `#`
+- `docs/source-of-truth/` defines the official current state.
+- `docs/reference/` is derived and supporting material.
+- `docs/plans/`, chats, PDFs, and loose notes are working material, not governing truth.
+- If docs conflict, `docs/source-of-truth/` wins.
 
 ## Quick Start
 
@@ -67,18 +72,18 @@ npm run lint:web
 npm run test:web
 ```
 
-## Hosted Deployment
-
-For a hosted deployment or custom domain:
-
-1. Run `npm run build:web`.
-2. Publish the generated `web/dist/` output as a static site with SPA fallback to `index.html`.
-3. Use `https` on the final domain.
-
-Important browser/runtime constraints:
+## Browser And Hosting Notes
 
 - Web Serial requires a secure context and a Chromium-based browser.
-- Web Bluetooth device flows also require a secure context and supported browser/device combinations.
-- iOS Safari is not a full replacement for Chromium Web Serial workflows.
+- Web Bluetooth flows also require a secure context and supported browser/device combinations.
+- For hosted deployments, publish `web/dist/` as a static SPA with fallback to `index.html`.
+- Browser support is useful, but the longer-term product direction still includes BLE and a later native mobile client.
 
-If you are preparing a public-facing hosted version, `web/` is the only source of truth in this repository.
+## Additional Helpers
+
+- `V1_5_NOTE.md`
+  - transition note and quick orientation
+- `REPO_MAP.md`
+  - repo navigation helper
+- `docs/reference/00_CODEX_QUICKSTART.md`
+  - fast AI-oriented reminder after reading the canonical docs
