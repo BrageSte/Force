@@ -1,15 +1,40 @@
-# Node / web
+# Dependencies
 node_modules/
-web/node_modules/
-web/dist/
-web/coverage/
+
+# Build outputs
+build/
+coverage/
+dist/
+dist-ssr/
 *.tsbuildinfo
 
-# Arduino / build
-build/
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor settings
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # Local tooling
 .claude/settings.local.json
 
-# macOS
+# OS files
 .DS_Store
